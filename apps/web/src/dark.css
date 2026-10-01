@@ -276,6 +276,82 @@ html.dark .search-results a:hover {
   background: #243b2f;
 }
 
+/* Topbar Search in Dark Mode */
+html.dark .topbar-search {
+  background: #182b22;
+  border-color: #385044;
+}
+
+html.dark .topbar-search:hover:not(.is-expanded) {
+  background: #203c2d;
+  border-color: #d0b77e;
+}
+
+html.dark .topbar-search-icon {
+  color: #ecebe2;
+}
+
+html.dark .topbar-search.is-expanded,
+html.dark .topbar-search:focus-within {
+  background: #14251d;
+  border-color: #d0b77e;
+  box-shadow: 0 0 0 3px rgba(208, 183, 126, 0.2);
+}
+
+html.dark .topbar-search.is-expanded .topbar-search-icon,
+html.dark .topbar-search:focus-within .topbar-search-icon {
+  color: #a4b3a9;
+}
+
+html.dark .topbar-search-input {
+  color: #f7f4ec;
+}
+
+html.dark .topbar-search-input:focus,
+html.dark .topbar-search-input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+html.dark .topbar-search-input::placeholder {
+  color: #708579;
+}
+
+html.dark .topbar-search-clear {
+  background: #203c2d;
+  color: #a4b3a9;
+}
+
+html.dark .topbar-search-clear:hover {
+  background: #2d523e;
+  color: #ffffff;
+}
+
+html.dark .topbar-search-shortcut {
+  background: #203c2d;
+  color: #a4b3a9;
+  border-color: #385044;
+}
+
+html.dark .topbar-search .search-results {
+  background: #14251d;
+  border-color: #385044;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+}
+
+html.dark .search-results strong {
+  color: #f7f4ec;
+}
+
+html.dark .search-results small {
+  color: #a4b3a9;
+}
+
+html.dark .search-results .search-status {
+  color: #a4b3a9;
+}
+
 /* Sidebar & Navigation */
 html.dark .sidebar {
   background: #09140f;
@@ -419,10 +495,14 @@ html.dark .icon-button:hover {
 }
 
 html.dark .notification-button {
+  background: #182b22;
+  border-color: #385044;
   color: #acb9b0;
 }
 
 html.dark .notification-button:hover {
+  background: #203c2d;
+  border-color: #d0b77e;
   color: #f7f4ec;
 }
 
@@ -1116,3 +1196,93 @@ html.dark .onboard-success-actions a { border-color: #2d4436; color: #f7f4ec; }
 html.dark .onboard-photo-inline button,
 html.dark .onboard-add,
 html.dark .onboard-edit { background: #1d342b; border-color: #2d4436; color: #8ed7ca; }
+
+/* Avatar dark mode integration */
+html.dark .avatar,
+[data-theme="dark"] .avatar {
+  background: #182b22;
+  color: #ecebe2;
+}
+html.dark .avatar.large,
+[data-theme="dark"] .avatar.large {
+  background: #203c2d;
+  color: #f7f4ec;
+}
+html.dark .account .avatar,
+[data-theme="dark"] .account .avatar {
+  background: transparent;
+  color: #f7f4ec;
+}
+html.dark .onboard-avatar,
+[data-theme="dark"] .onboard-avatar {
+  background: #182b22;
+  color: #8ed7ca;
+}
+
+/* Client Combobox Dark Mode */
+html.dark .client-combobox-input-wrap,
+[data-theme="dark"] .client-combobox-input-wrap {
+  background: #182b22;
+  border-color: #385044;
+}
+
+html.dark .client-combobox-input-wrap.is-focused,
+html.dark .client-combobox-input-wrap:focus-within,
+[data-theme="dark"] .client-combobox-input-wrap.is-focused,
+[data-theme="dark"] .client-combobox-input-wrap:focus-within {
+  border-color: #d0b77e;
+  outline-color: #d0b77e;
+}
+
+html.dark .client-combobox-selected,
+[data-theme="dark"] .client-combobox-selected {
+  background: #182b22;
+  border-color: #385044;
+}
+
+html.dark .client-combobox-selected:hover,
+[data-theme="dark"] .client-combobox-selected:hover {
+  border-color: #d0b77e;
+}
+
+html.dark .client-combobox-clear-btn,
+[data-theme="dark"] .client-combobox-clear-btn {
+  background: #14241d;
+  border-color: #385044;
+  color: #a4b3a9;
+}
+
+html.dark .client-combobox-clear-btn:hover,
+[data-theme="dark"] .client-combobox-clear-btn:hover {
+  background: #3f1a1a;
+  border-color: #8c2e2e;
+  color: #f87171;
+}
+
+html.dark .client-combobox-dropdown,
+[data-theme="dark"] .client-combobox-dropdown {
+  background: #14241d;
+  border-color: #385044;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .client-combobox-option:hover,
+html.dark .client-combobox-option.highlighted,
+html.dark .client-combobox-option.selected,
+[data-theme="dark"] .client-combobox-option:hover,
+[data-theme="dark"] .client-combobox-option.highlighted,
+[data-theme="dark"] .client-combobox-option.selected {
+  background: #203c2d;
+}
+
+html.dark .client-combobox-footer,
+[data-theme="dark"] .client-combobox-footer {
+  background: #101e18;
+  border-top-color: #385044;
+}
+
+html.dark .client-combobox-footer-action,
+[data-theme="dark"] .client-combobox-footer-action {
+  color: #d0b77e;
+}
+

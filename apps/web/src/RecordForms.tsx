@@ -12,6 +12,7 @@ import {
   Avatar,
   Back,
   Badge,
+  ClientCombobox,
   ContactActions,
   Empty,
   ErrorState,
@@ -42,12 +43,7 @@ export function NewRecord({
     navigate = useNavigate(),
     write = useWrite(),
     toast = useToast();
-  const clients = useData("/clients?limit=100"),
-    selectedClient = useData(
-      "/clients/" + params.get("clientId"),
-      !!params.get("clientId"),
-    ),
-    members = useData("/members"),
+  const members = useData("/members"),
     catalogue = useData("/catalogue");
   const [clientId, setClientId] = useState(params.get("clientId") || ""),
     [error, setError] = useState("");
@@ -63,13 +59,7 @@ export function NewRecord({
       "/renewals?clientId=" + clientId,
       !!clientId && type === "followups",
     );
-  const clientOptionReady =
-    !clientId ||
-    clients.data?.data.some((c: any) => c.id === clientId) ||
-    selectedClient.data?.data?.id === clientId;
   const formReady =
-    clientOptionReady &&
-    !clients.isPending &&
     !members.isPending &&
     (type !== "products" || !catalogue.isPending);
   const title =
@@ -80,6 +70,10 @@ export function NewRecord({
         : "Add Product";
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     const f = formValues(e);
+    if (!clientId) {
+      setError("Please select a client");
+      return;
+    }
     let body: any;
     try {
       if (type === "leads")
@@ -133,27 +127,14 @@ export function NewRecord({
           <div className="form-grid">
             <label>
               Client *
-              <select
+              <ClientCombobox
+                value={clientId}
+                onChange={(id) => {
+                  setClientId(id);
+                  if (error) setError("");
+                }}
                 required
-                value={clientOptionReady ? clientId : ""}
-                onChange={(e) => setClientId(e.target.value)}
-              >
-                <option value="">Select client</option>
-                {selectedClient.data?.data &&
-                  !clients.data?.data.some(
-                    (c: any) => c.id === selectedClient.data.data.id,
-                  ) && (
-                    <option value={selectedClient.data.data.id}>
-                      {selectedClient.data.data.name} ·{" "}
-                      {selectedClient.data.data.phone}
-                    </option>
-                  )}
-                {clients.data?.data.map((c: any) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} · {c.phone}
-                  </option>
-                ))}
-              </select>
+              />
               <Link className="text-link" to="/clients/new">
                 Create a new client
               </Link>

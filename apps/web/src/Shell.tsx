@@ -11,7 +11,6 @@ import {
   ChartNoAxesColumnIncreasing,
   CheckSquare,
   ChevronDown,
-  ChevronRight,
   House,
   LogOut,
   Menu,
@@ -26,10 +25,11 @@ import {
   CalendarDays,
   Moon,
   Sun,
+  PanelLeft,
 } from "lucide-react";
 import { api, useData } from "./api";
 import { Avatar, Botanical, useAuth } from "./components";
-import { ThemeToggle, useTheme } from "./theme";
+import { useTheme } from "./theme";
 const nav = [
   ["Dashboard", "/dashboard", House],
   ["Clients", "/clients", Users],
@@ -48,8 +48,13 @@ export default function Shell() {
     { resolvedTheme, toggleTheme } = useTheme();
   const [drawer, setDrawer] = useState(false),
     [search, setSearch] = useState(""),
-    [account, setAccount] = useState(false);
+    [searchOpen, setSearchOpen] = useState(false),
+    [account, setAccount] = useState(false),
+    [sidebarExpanded, setSidebarExpanded] = useState(false),
+    [pinned, setPinned] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
   const sidebar = useRef<HTMLElement>(null);
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 999px)").matches,
@@ -104,8 +109,36 @@ export default function Shell() {
   useEffect(() => {
     setDrawer(false);
     setSearch("");
+    setSearchOpen(false);
     setAccount(false);
   }, [location.pathname]);
+  useEffect(() => {
+    if (!searchOpen && !account) return;
+    const handleOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        searchOpen &&
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(target)
+      ) {
+        setSearchOpen(false);
+        setSearch("");
+      }
+      if (
+        account &&
+        accountRef.current &&
+        !accountRef.current.contains(target)
+      ) {
+        setAccount(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, [searchOpen, account]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (
@@ -114,12 +147,15 @@ export default function Shell() {
         !(e.target instanceof HTMLTextAreaElement)
       ) {
         e.preventDefault();
-        input.current?.focus();
+        setSearchOpen(true);
+        setTimeout(() => input.current?.focus(), 50);
       }
       if (e.key === "Escape") {
         setDrawer(false);
         setSearch("");
+        setSearchOpen(false);
         setAccount(false);
+        input.current?.blur();
       }
     };
     window.addEventListener("keydown", handler);
@@ -145,15 +181,17 @@ export default function Shell() {
       <aside
         ref={sidebar}
         id="main-navigation"
-        className={"sidebar " + (drawer ? "open" : "")}
-        inert={compact && !drawer}
+        className={`sidebar ${compact ? (drawer ? "open" : "") : (pinned || sidebarExpanded ? "sidebar--expanded" : "sidebar--mini")}`}
+        inert={compact && !drawer ? true : undefined}
         role={compact && drawer ? "dialog" : undefined}
         aria-modal={compact && drawer ? true : undefined}
         aria-label={compact && drawer ? "Navigation" : undefined}
+        onMouseEnter={() => !compact && setSidebarExpanded(true)}
+        onMouseLeave={() => !compact && setSidebarExpanded(false)}
       >
         <Link className="brand" to="/dashboard">
           <img src="/assets/logo.png" alt="" />
-          <span>
+          <span className="brand-text">
             <strong>Parvath FinServ</strong>
             <small>Your Financial Partner</small>
           </span>
@@ -169,10 +207,8 @@ export default function Shell() {
           {nav.map(([label, to, C]) => (
             <NavLink key={to} to={to}>
               <C size={21} />
-              <span>{label}</span>
-              {["Products", "Engagement"].includes(label) && (
-                <ChevronRight className="nav-chevron" size={16} />
-              )}
+              <span className="nav-label">{label}</span>
+
             </NavLink>
           ))}
         </nav>
@@ -196,61 +232,116 @@ export default function Shell() {
         <header className="topbar">
           <button
             className="menu-toggle"
-            aria-label="Open navigation"
-            aria-expanded={drawer}
+            aria-label={compact ? "Open navigation" : (pinned ? "Unpin navigation" : "Pin navigation")}
+            aria-expanded={compact ? drawer : pinned}
             aria-controls="main-navigation"
-            onClick={() => setDrawer(true)}
+            onClick={() => compact ? setDrawer(true) : setPinned(!pinned)}
           >
-            <Menu />
+            {compact ? <Menu /> : <PanelLeft />}
           </button>
-          <div className="global-search">
-            <Search size={19} />
-            <input
-              ref={input}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search clients, leads, policies, or press / to quick search..."
-              aria-label="Search all records"
-            />
-            {debounced.length >= 2 && (
-              <div className="search-results">
-                {results.isPending ? (
-                  <p>Searching…</p>
-                ) : results.error ? (
-                  <p>{results.error.message}</p>
-                ) : results.data?.data.length ? (
-                  results.data.data.map((r: any) => (
-                    <Link key={r.id} to={r.url}>
-                      <Search size={15} />
-                      <span>
-                        <strong>{r.title}</strong>
-                        <small>{r.subtitle}</small>
-                      </span>
-                    </Link>
-                  ))
-                ) : (
-                  <p>No matching records</p>
-                )}
-              </div>
-            )}
-          </div>
           <div className="top-actions">
-            <Link to="/engagement/new" className="button whatsapp-button">
-              <MessageCircle size={20} /> <span>Send WhatsApp</span>
-            </Link>
+            <div
+              ref={searchContainerRef}
+              className={`topbar-search ${searchOpen ? "is-expanded" : ""}`}
+              onClick={() => {
+                if (!searchOpen) {
+                  setSearchOpen(true);
+                  setTimeout(() => input.current?.focus(), 50);
+                }
+              }}
+            >
+              <button
+                type="button"
+                className="topbar-search-icon"
+                aria-label={searchOpen ? "Search icon" : "Search records"}
+                tabIndex={searchOpen ? -1 : 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (searchOpen) {
+                    if (search.length === 0) {
+                      setSearchOpen(false);
+                      input.current?.blur();
+                    } else {
+                      input.current?.focus();
+                    }
+                  } else {
+                    setSearchOpen(true);
+                    setTimeout(() => input.current?.focus(), 50);
+                  }
+                }}
+              >
+                <Search size={18} />
+              </button>
+              <input
+                ref={input}
+                className="topbar-search-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setSearchOpen(true)}
+                placeholder="Search clients, leads, policies..."
+                aria-label="Search all records"
+                tabIndex={searchOpen ? 0 : -1}
+              />
+              {searchOpen && search.length > 0 && (
+                <button
+                  type="button"
+                  className="topbar-search-clear"
+                  aria-label="Clear search"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSearch("");
+                    input.current?.focus();
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+              {searchOpen && search.length === 0 && (
+                <kbd className="topbar-search-shortcut" title="Press ESC to close">
+                  ESC
+                </kbd>
+              )}
+              {searchOpen && debounced.length >= 2 && (
+                <div className="search-results">
+                  {results.isPending ? (
+                    <p className="search-status">Searching…</p>
+                  ) : results.error ? (
+                    <p className="search-status search-error">{results.error.message}</p>
+                  ) : results.data?.data.length ? (
+                    results.data.data.map((r: any) => (
+                      <Link
+                        key={r.id}
+                        to={r.url}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setSearch("");
+                        }}
+                      >
+                        <Search size={15} />
+                        <span>
+                          <strong>{r.title}</strong>
+                          <small>{r.subtitle}</small>
+                        </span>
+                      </Link>
+                    ))
+                  ) : (
+                    <p className="search-status">No matching records found</p>
+                  )}
+                </div>
+              )}
+            </div>
             {(user.role !== "Operations" || isFollow) && (
               <Link className="button primary" to={primary[1]}>
                 <Plus size={19} />
                 <span>{primary[0]}</span>
               </Link>
             )}
-            <ThemeToggle />
             <Link
               className="notification-button"
               to="/notifications"
               aria-label="Notifications"
             >
-              <Bell size={23} />
+              <Bell size={20} />
               {notifications.data?.data.filter((n: any) => !n.readAt).length >
                 0 && (
                 <b>
@@ -258,7 +349,7 @@ export default function Shell() {
                 </b>
               )}
             </Link>
-            <div className="account">
+            <div ref={accountRef} className="account">
               <button
                 onClick={() => setAccount(!account)}
                 aria-expanded={account}
@@ -271,6 +362,7 @@ export default function Shell() {
               {account && (
                 <div className="account-menu">
                   <p>{user.role}</p>
+
                   <button
                     type="button"
                     onClick={() => {

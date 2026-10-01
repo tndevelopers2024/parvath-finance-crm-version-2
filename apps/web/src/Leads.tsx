@@ -185,7 +185,7 @@ export default function Leads() {
       ) : view === "Kanban" ? (
         <DndContext sensors={sensors} onDragEnd={move}>
           <div className="lead-board">
-            {stages.slice(0, 4).map((s, i) => (
+            {stages.map((s, i) => (
               <LeadColumn
                 key={s}
                 stage={s}
@@ -193,18 +193,6 @@ export default function Leads() {
                 rows={rows.filter((r: any) => r.stage === s)}
               />
             ))}
-            <div className="closed-columns">
-              <LeadColumn
-                stage="Won"
-                index={4}
-                rows={rows.filter((r: any) => r.stage === "Won")}
-              />
-              <LeadColumn
-                stage="Lost"
-                index={5}
-                rows={rows.filter((r: any) => r.stage === "Lost")}
-              />
-            </div>
           </div>
         </DndContext>
       ) : (

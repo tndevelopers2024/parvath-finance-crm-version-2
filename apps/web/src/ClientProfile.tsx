@@ -20,6 +20,7 @@ import {
   Avatar,
   Back,
   Badge,
+  ClientCombobox,
   ContactActions,
   Empty,
   ErrorState,
@@ -732,13 +733,14 @@ function RelationshipModal({
   clientId: string;
   onClose: () => void;
 }) {
-  const list = useData("/clients?limit=100"),
-    write = useWrite();
+  const write = useWrite();
+  const [targetClientId, setTargetClientId] = useState("");
   return (
     <Modal title="Link an existing contact" onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!targetClientId) return;
           const f = new FormData(e.currentTarget);
           await write.mutateAsync({
             path: `/clients/${clientId}/relationships`,
@@ -748,17 +750,15 @@ function RelationshipModal({
         }}
       >
         <label>
-          Contact
-          <select name="clientId" required>
-            <option value="">Choose contact</option>
-            {list.data?.data
-              .filter((c: any) => c.id !== clientId)
-              .map((c: any) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
+          Contact *
+          <ClientCombobox
+            name="clientId"
+            value={targetClientId}
+            onChange={(id) => setTargetClientId(id)}
+            excludeId={clientId}
+            placeholder="Search contact to link by name, phone..."
+            required
+          />
         </label>
         <label>
           Relationship
@@ -771,7 +771,9 @@ function RelationshipModal({
           </select>
         </label>
         <FormError error={write.error} />
-        <button className="primary">Link contact</button>
+        <button className="primary" disabled={!targetClientId || write.isPending}>
+          {write.isPending ? "Linking…" : "Link contact"}
+        </button>
       </form>
     </Modal>
   );

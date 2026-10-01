@@ -19,6 +19,7 @@ import {
 } from "../../../packages/contracts/src/index";
 import { api, useData, useWrite } from "./api";
 import {
+  Avatar,
   Back,
   FormError,
   Loading,
@@ -364,13 +365,11 @@ export default function ClientForm() {
                 </fieldset>
                 <div className="onboard-photo-inline">
                   <div className="onboard-avatar">
-                    {watch("name")
-                      ?.trim()
-                      .split(/\s+/)
-                      .map((s) => s[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase() || <UserRound size={28} />}
+                    <Avatar
+                      name={watch("name") || "New Client"}
+                      photoUrl={photo ? URL.createObjectURL(photo) : undefined}
+                      animate="always"
+                    />
                   </div>
                   <div>
                     <strong>Profile Photo</strong>

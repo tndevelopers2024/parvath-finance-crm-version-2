@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Sun,
+  Sunset,
+  Moon,
   Lightbulb,
   Cake,
   CalendarDays,
   Phone,
   Target,
   FileText,
+  MessageCircle,
 } from "lucide-react";
 import { date, rupees, time, useData } from "./api";
 import {
@@ -20,14 +23,40 @@ import {
   Loading,
   Metrics,
   Panel,
-  QuickActions,
   Tabs,
   useAuth,
 } from "./components";
+const QUOTES = [
+  "“Strong relationships\nbuild secure tomorrows.”",
+  "“An investment in knowledge\npays the best interest.”",
+  "“Consistency and patience\ncompound into prosperity.”",
+  "“Trust is the currency\nof enduring partnerships.”",
+  "“Financial peace begins\nwith clear planning.”",
+  "“Protecting families today\nfor a confident tomorrow.”",
+  "“Disciplined wealth management\nturns dreams into reality.”",
+];
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 4 && hour < 12) {
+    return { text: "Good Morning", Icon: Sun };
+  }
+  if (hour >= 12 && hour < 17) {
+    return { text: "Good Afternoon", Icon: Sun };
+  }
+  if (hour >= 17 && hour < 22) {
+    return { text: "Good Evening", Icon: Sunset };
+  }
+  return { text: "Good Evening", Icon: Moon };
+}
+
 export default function Dashboard() {
   const { data, isPending, error, refetch } = useData("/dashboard");
   const [tab, setTab] = useState("All"),
     [selected, setSelected] = useState("");
+  const [quoteIndex, setQuoteIndex] = useState(
+    () => new Date().getDate() % QUOTES.length,
+  );
   const user = useAuth();
   if (isPending) return <Loading />;
   if (error) return <ErrorState error={error} retry={refetch} />;
@@ -91,19 +120,39 @@ export default function Dashboard() {
         tone: "lavender",
       })),
   ].filter((a) => (tab === "All" ? a.type !== "Leads" : a.type === tab));
+  const { text: greetingText, Icon: GreetingIcon } = getGreeting();
+  const dueTodayCount =
+    (d.followupsToday || 0) +
+    events.filter((e: any) => e.timing === "Due Today").length +
+    (d.birthdays?.length || 0);
+
   return (
     <div className="dashboard-layout">
       <div className="dashboard-main">
         <section className="greeting">
-          <Sun size={56} />
+          <GreetingIcon size={56} />
           <div>
-            <h1>Good Morning, {user.name.split(" ")[0]}!</h1>
-            <p>Here’s what needs your attention today.</p>
+            <h1>
+              {greetingText}, {user?.name ? user.name.split(" ")[0] : "Advisor"}
+              !
+            </h1>
+            <p>
+              {dueTodayCount > 0
+                ? `Here’s what needs your attention today (${dueTodayCount} priority item${dueTodayCount === 1 ? "" : "s"}).`
+                : "Here’s what needs your attention today."}
+            </p>
           </div>
-          <blockquote>
-            “Strong relationships
-            <br />
-            build secure tomorrows.”
+          <blockquote
+            onClick={() => setQuoteIndex((i) => (i + 1) % QUOTES.length)}
+            title="Click to cycle quote"
+            style={{ cursor: "pointer", userSelect: "none" }}
+          >
+            {QUOTES[quoteIndex].split("\n").map((line, idx) => (
+              <span key={idx}>
+                {line}
+                {idx === 0 && <br />}
+              </span>
+            ))}
           </blockquote>
           <img src="/assets/logo.png" alt="" />
         </section>
@@ -186,9 +235,84 @@ export default function Dashboard() {
               <Empty text="Nothing needs attention in this category." />
             )}
           </Panel>
-          <div className="dashboard-secondary">
-            <Panel title="Quick Actions">
-              <QuickActions />
+
+          <div className="dashboard-activity-col">
+            <Panel
+              title="Recent Activity"
+              action={
+                <Link className="text-link" to="/reports">
+                  View All <ArrowRight size={14} />
+                </Link>
+              }
+            >
+              {d.activity.slice(0, 5).map((a: any, i: number) => (
+                <div className="activity-row" key={a.id}>
+                  <span
+                    className={`product-icon ${["mint", "blue", "lavender"][i % 3]}`}
+                  >
+                    <FileText size={18} />
+                  </span>
+                  <div>
+                    <strong>{a.summary}</strong>
+                    <small>{date(a.createdAt)}</small>
+                  </div>
+                  <time>{time(a.createdAt)}</time>
+                </div>
+              ))}
+            </Panel>
+          </div>
+
+          <div className="dashboard-right-inline">
+            <Panel className="dashboard-calendar">
+              <Calendar selected={day} onSelect={setSelected} />
+              <div className="day-summary">
+                <h3>
+                  {day === d.today ? "Today, " : ""}
+                  {date(day)}
+                </h3>
+                <Link to={"/renewals?from=" + day + "&to=" + day}>
+                  <span className="product-icon rose">
+                    <CalendarDays size={17} />
+                  </span>
+                  <b>
+                    {
+                      events.filter((e: any) => e.dueDate.slice(0, 10) === day)
+                        .length
+                    }
+                  </b>{" "}
+                  Renewals due
+                </Link>
+                <Link to="/followups">
+                  <span className="product-icon blue">
+                    <FileText size={17} />
+                  </span>
+                  <b>
+                    {
+                      tasks.filter(
+                        (f: any) =>
+                          new Date(f.dueAt).toLocaleDateString("en-CA", {
+                            timeZone: "Asia/Kolkata",
+                          }) === day,
+                      ).length
+                    }
+                  </b>{" "}
+                  Follow-ups
+                </Link>
+                <Link to="/clients">
+                  <span className="product-icon mint">
+                    <Cake size={17} />
+                  </span>
+                  <b>
+                    {d.birthdayCalendar?.filter(
+                      (b: any) => b.monthDay === day.slice(5),
+                    ).length || 0}
+                  </b>{" "}
+                  Birthdays
+                </Link>
+                <Link className="text-link align-end" to="/followups">
+                  View All <ArrowRight size={14} />
+                </Link>
+              </div>
             </Panel>
           </div>
         </div>
@@ -206,82 +330,6 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
-      <aside className="dashboard-right">
-        <Panel className="dashboard-calendar">
-          <Calendar selected={day} onSelect={setSelected} />
-          <div className="day-summary">
-            <h3>
-              {day === d.today ? "Today, " : ""}
-              {date(day)}
-            </h3>
-            <Link to={"/renewals?from=" + day + "&to=" + day}>
-              <span className="product-icon rose">
-                <CalendarDays size={17} />
-              </span>
-              <b>
-                {
-                  events.filter((e: any) => e.dueDate.slice(0, 10) === day)
-                    .length
-                }
-              </b>{" "}
-              Renewals due
-            </Link>
-            <Link to="/followups">
-              <span className="product-icon blue">
-                <FileText size={17} />
-              </span>
-              <b>
-                {
-                  tasks.filter(
-                    (f: any) =>
-                      new Date(f.dueAt).toLocaleDateString("en-CA", {
-                        timeZone: "Asia/Kolkata",
-                      }) === day,
-                  ).length
-                }
-              </b>{" "}
-              Follow-ups
-            </Link>
-            <Link to="/clients">
-              <span className="product-icon mint">
-                <Cake size={17} />
-              </span>
-              <b>
-                {d.birthdayCalendar?.filter(
-                  (b: any) => b.monthDay === day.slice(5),
-                ).length || 0}
-              </b>{" "}
-              Birthdays
-            </Link>
-            <Link className="text-link align-end" to="/followups">
-              View All <ArrowRight size={14} />
-            </Link>
-          </div>
-        </Panel>
-        <Panel
-          title="Recent Activity"
-          action={
-            <Link className="text-link" to="/reports">
-              View All <ArrowRight size={14} />
-            </Link>
-          }
-        >
-          {d.activity.slice(0, 5).map((a: any, i: number) => (
-            <div className="activity-row" key={a.id}>
-              <span
-                className={`product-icon ${["mint", "blue", "lavender"][i % 3]}`}
-              >
-                <FileText size={18} />
-              </span>
-              <div>
-                <strong>{a.summary}</strong>
-                <small>{date(a.createdAt)}</small>
-              </div>
-              <time>{time(a.createdAt)}</time>
-            </div>
-          ))}
-        </Panel>
-      </aside>
     </div>
   );
 }

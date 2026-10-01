@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import type { ClientInput } from "../../../packages/contracts/src/index";
 import { onboardingProfileSchema } from "../../../packages/contracts/src/index";
 import type { z } from "zod";
+import { Avatar } from "./components";
 
 export type OnboardingProfile = z.input<typeof onboardingProfileSchema>;
 type Props = {
@@ -679,13 +680,7 @@ export function ReviewSummary({
     <div className="onboard-review">
       <div className="onboard-review-identity">
         <div className="onboard-avatar">
-          {v.name
-            ?.trim()
-            .split(/\s+/)
-            .map((s) => s[0])
-            .slice(0, 2)
-            .join("")
-            .toUpperCase() || "?"}
+          <Avatar name={v.name || "New Client"} animate="always" />
         </div>
         <div>
           <h2>{v.name || "New Client"}</h2>

@@ -16,6 +16,7 @@ import { date, query, rupees, useData, useWrite } from "./api";
 import {
   Avatar,
   Badge,
+  ClientCombobox,
   Empty,
   ErrorState,
   ExportButton,
@@ -118,16 +119,19 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
     q = useData(
       "/communications?" + query({ clientId: params.get("clientId") }),
     ),
-    clients = useData("/clients?limit=100"),
     write = useWrite(),
     toast = useToast();
   const [channel, setChannel] = useState(params.get("channel") || "WhatsApp"),
     [clientId, setClientId] = useState(params.get("clientId") || ""),
     [body, setBody] = useState(""),
     [event, setEvent] = useState("Message prepared");
-  const client = clients.data?.data.find((c: any) => c.id === clientId);
+  const clientQuery = useData(`/clients/${clientId}`, !!clientId);
+  const client = clientQuery.data?.data;
   const open = async () => {
-    if (!client) return;
+    if (!client) {
+      toast("Please choose a client first");
+      return;
+    }
     try {
       await write.mutateAsync({
         path: "/communications",
@@ -135,9 +139,9 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
       });
       const url =
         channel === "WhatsApp"
-          ? `https://wa.me/${client.phone.replace(/\D/g, "")}?text=${encodeURIComponent(body)}`
+          ? `https://wa.me/${(client.phone || "").replace(/\D/g, "")}?text=${encodeURIComponent(body)}`
           : channel === "Call"
-            ? `tel:${client.phone}`
+            ? `tel:${client.phone || ""}`
             : `mailto:${client.email || ""}?body=${encodeURIComponent(body)}`;
       window.open(url, "_blank", "noopener,noreferrer");
       toast("Conversation opened; delivery is not assumed.");
@@ -164,6 +168,10 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (!clientId) {
+                toast("Please select a client first");
+                return;
+              }
               try {
                 await write.mutateAsync({
                   path: "/communications",
@@ -177,19 +185,12 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
           >
             <div className="form-grid">
               <label>
-                Client
-                <select
-                  required
+                Client *
+                <ClientCombobox
                   value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                >
-                  <option value="">Choose client</option>
-                  {clients.data?.data.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(id) => setClientId(id)}
+                  required
+                />
               </label>
               <label>
                 Channel

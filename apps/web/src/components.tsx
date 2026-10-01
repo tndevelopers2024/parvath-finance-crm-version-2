@@ -11,6 +11,7 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -41,7 +42,12 @@ import {
   CalendarPlus,
   type LucideIcon,
 } from "lucide-react";
-import { date, initials, useWrite } from "./api";
+import { date, query, useData, useWrite } from "./api";
+import { Blobatar, useGaze } from "./blobatar";
+import "./blobatar/motion.css";
+import "./blobatar/gaze.css";
+import { useTheme } from "./theme";
+
 export const icons: Record<string, LucideIcon> = {
   clients: Users,
   individual: UserRound,
@@ -72,26 +78,61 @@ export function Icon({
   const C = icons[name] || FileText;
   return <C size={size} {...props} />;
 }
+const BRAND_HUES = [155, 140, 45, 170, 55, 115];
+
 export function Avatar({
   name,
   size = "normal",
   photoId,
+  photoUrl,
+  animate = "always",
+  followCursor = true,
 }: {
-  name: string;
+  name?: string;
   size?: string;
   photoId?: string;
+  photoUrl?: string;
+  animate?: "hover" | "always";
+  followCursor?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const cleanName = (name || "").trim() || "User";
+  const nameHash = cleanName
+    .split("")
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const brandHue = BRAND_HUES[nameHash % BRAND_HUES.length];
+
+  const { ref } = useGaze({
+    travel: size === "large" ? 5 : 3.5,
+    lookAt: followCursor ? "pointer" : undefined,
+  });
+
+  const imageSrc = photoUrl || (photoId ? `/api/documents/${photoId}/download` : undefined);
+
   return (
-    <span className={`avatar ${size} hue-${(name.charCodeAt(0) || 0) % 4}`}>
-      {photoId && !failed ? (
+    <span
+      className={`avatar ${size} hue-${nameHash % 4}`}
+      title={cleanName}
+    >
+      {imageSrc && !failed ? (
         <img
-          src={"/api/documents/" + photoId + "/download"}
-          alt={name}
+          src={imageSrc}
+          alt={cleanName}
           onError={() => setFailed(true)}
         />
       ) : (
-        initials(name)
+        <Blobatar
+          ref={ref as any}
+          name={cleanName}
+          animate={animate}
+          background={true}
+          hue={brandHue}
+          tone={isDark ? 0.95 : 0.15}
+          palette={isDark ? { bg: "#182b22" } : { bg: "#e9eee8" }}
+          className="avatar-blobatar"
+        />
       )}
     </span>
   );
@@ -659,6 +700,432 @@ export function Submit({
     </button>
   );
 }
+export interface ClientItem {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  kind?: string;
+  city?: string;
+  [key: string]: any;
+}
+
+export function ClientCombobox({
+  value,
+  onChange,
+  name,
+  required = false,
+  disabled = false,
+  placeholder = "Search client by name, phone, or email...",
+  excludeId,
+  initialClient,
+  className = "",
+  autoFocus = false,
+}: {
+  value?: string;
+  onChange: (clientId: string, client?: ClientItem | null) => void;
+  name?: string;
+  required?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
+  excludeId?: string;
+  initialClient?: ClientItem | null;
+  className?: string;
+  autoFocus?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedTerm, setDebouncedTerm] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedTerm(searchTerm.trim());
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const clientsQuery = useData(
+    "/clients?" + query({ q: debouncedTerm, limit: 30 }),
+    open || !!value,
+  );
+
+  const singleClientQuery = useData(
+    "/clients/" + value,
+    !!value && !initialClient,
+  );
+
+  const rawClients: ClientItem[] = clientsQuery.data?.data || [];
+  const listClients = rawClients.filter(
+    (c) => !excludeId || c.id !== excludeId,
+  );
+
+  const selectedClient: ClientItem | undefined =
+    initialClient?.id === value
+      ? initialClient
+      : listClients.find((c) => c.id === value) ||
+        (singleClientQuery.data?.data?.id === value
+          ? singleClientQuery.data.data
+          : undefined);
+
+  const termLower = searchTerm.trim().toLowerCase();
+  const filteredClients = listClients.filter((c) => {
+    if (!termLower) return true;
+    return (
+      (c.name && c.name.toLowerCase().includes(termLower)) ||
+      (c.phone && c.phone.toLowerCase().includes(termLower)) ||
+      (c.email && c.email.toLowerCase().includes(termLower)) ||
+      (c.city && c.city.toLowerCase().includes(termLower))
+    );
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, []);
+
+  const handleSelect = (client: ClientItem) => {
+    onChange(client.id, client);
+    setOpen(false);
+    setSearchTerm("");
+    setHighlightedIndex(-1);
+  };
+
+  const handleClear = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    onChange("", null);
+    setSearchTerm("");
+    setOpen(true);
+    setHighlightedIndex(-1);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const handleOpenSearch = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!disabled) {
+      setOpen(true);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`client-combobox ${className} ${open ? "is-open" : ""}`}
+    >
+      <input
+        type="text"
+        name={name}
+        value={value || ""}
+        required={required}
+        tabIndex={-1}
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          opacity: 0,
+          width: "1px",
+          height: "1px",
+          margin: "-1px",
+          padding: 0,
+          border: 0,
+          pointerEvents: "none",
+          clip: "rect(0 0 0 0)",
+          overflow: "hidden",
+        }}
+        readOnly
+      />
+
+      {value && selectedClient && !open ? (
+        <div
+          className={`client-combobox-selected ${disabled ? "disabled" : ""}`}
+          onClick={handleOpenSearch}
+          title="Click to change selected client"
+        >
+          <div className="client-combobox-selected-info">
+            <Avatar name={selectedClient.name} size="small" />
+            <div className="client-combobox-details">
+              <div className="client-combobox-name-row">
+                <strong className="client-combobox-name">
+                  {selectedClient.name}
+                </strong>
+                {selectedClient.kind && (
+                  <span
+                    className={`badge ${selectedClient.kind === "Business" ? "lavender" : "mint"}`}
+                  >
+                    {selectedClient.kind}
+                  </span>
+                )}
+              </div>
+              <div className="client-combobox-meta">
+                {selectedClient.phone && <span>{selectedClient.phone}</span>}
+                {selectedClient.email && (
+                  <>
+                    {selectedClient.phone && (
+                      <span className="separator">·</span>
+                    )}
+                    <span>{selectedClient.email}</span>
+                  </>
+                )}
+                {selectedClient.city && (
+                  <>
+                    <span className="separator">·</span>
+                    <span>{selectedClient.city}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="client-combobox-selected-actions">
+            {!disabled && (
+              <>
+                <button
+                  type="button"
+                  className="button small client-combobox-change-btn"
+                  onClick={handleOpenSearch}
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  aria-label="Clear selected client"
+                  title="Clear client"
+                  className="client-combobox-clear-btn"
+                  onClick={handleClear}
+                >
+                  <X size={15} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`client-combobox-input-wrap ${open ? "is-focused" : ""} ${disabled ? "disabled" : ""}`}
+          onClick={() => {
+            if (!disabled && !open) {
+              setOpen(true);
+              inputRef.current?.focus();
+            }
+          }}
+        >
+          <Search size={16} className="client-combobox-icon" />
+          <input
+            ref={inputRef}
+            type="text"
+            role="combobox"
+            aria-expanded={open}
+            aria-autocomplete="list"
+            aria-controls="client-combobox-list"
+            autoComplete="off"
+            className="client-combobox-input"
+            placeholder={
+              value && selectedClient
+                ? `Current: ${selectedClient.name} (type to change...)`
+                : placeholder
+            }
+            value={searchTerm}
+            disabled={disabled}
+            autoFocus={autoFocus}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              if (!open) setOpen(true);
+              setHighlightedIndex(0);
+            }}
+            onFocus={() => {
+              setOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (!open) {
+                  setOpen(true);
+                } else if (filteredClients.length > 0) {
+                  setHighlightedIndex((prev) =>
+                    prev < filteredClients.length - 1 ? prev + 1 : 0,
+                  );
+                }
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                if (open && filteredClients.length > 0) {
+                  setHighlightedIndex((prev) =>
+                    prev > 0 ? prev - 1 : filteredClients.length - 1,
+                  );
+                }
+              } else if (e.key === "Enter") {
+                if (
+                  open &&
+                  highlightedIndex >= 0 &&
+                  filteredClients[highlightedIndex]
+                ) {
+                  e.preventDefault();
+                  handleSelect(filteredClients[highlightedIndex]);
+                }
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setOpen(false);
+              }
+            }}
+          />
+          <div className="client-combobox-input-actions">
+            {clientsQuery.isPending && (
+              <span className="spinner" style={{ width: 14, height: 14 }} />
+            )}
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search text"
+                className="client-combobox-clear-query"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSearchTerm("");
+                  inputRef.current?.focus();
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
+            {value && (
+              <button
+                type="button"
+                aria-label="Clear selected client"
+                title="Clear selected client"
+                className="client-combobox-clear-query"
+                onClick={handleClear}
+              >
+                <X size={14} />
+              </button>
+            )}
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={open ? "Close menu" : "Open menu"}
+              className="client-combobox-toggle"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!disabled) {
+                  setOpen(!open);
+                  if (!open) inputRef.current?.focus();
+                }
+              }}
+            >
+              <ChevronDown
+                size={16}
+                className={`chevron-icon ${open ? "rotated" : ""}`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {open && !disabled && (
+        <div
+          id="client-combobox-list"
+          role="listbox"
+          className="client-combobox-dropdown"
+        >
+          {filteredClients.length > 0 ? (
+            <div className="client-combobox-options">
+              {filteredClients.map((c, idx) => {
+                const isSelected = c.id === value;
+                const isHighlighted = idx === highlightedIndex;
+                return (
+                  <div
+                    key={c.id}
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`client-combobox-option ${isSelected ? "selected" : ""} ${isHighlighted ? "highlighted" : ""}`}
+                    onMouseEnter={() => setHighlightedIndex(idx)}
+                    onClick={() => handleSelect(c)}
+                  >
+                    <Avatar name={c.name} size="small" />
+                    <div className="client-combobox-option-info">
+                      <div className="client-combobox-option-title">
+                        <strong className="client-name">{c.name}</strong>
+                        {c.kind && (
+                          <span
+                            className={`badge ${c.kind === "Business" ? "lavender" : "mint"}`}
+                          >
+                            {c.kind}
+                          </span>
+                        )}
+                      </div>
+                      <div className="client-combobox-option-meta">
+                        {c.phone && <span>{c.phone}</span>}
+                        {c.email && (
+                          <>
+                            {c.phone && <span className="separator">·</span>}
+                            <span>{c.email}</span>
+                          </>
+                        )}
+                        {c.city && (
+                          <>
+                            <span className="separator">·</span>
+                            <span>{c.city}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="client-combobox-option-check">
+                        <Check size={16} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="client-combobox-empty">
+              <Users size={24} className="empty-icon" />
+              <div className="empty-text">
+                <p>
+                  {searchTerm
+                    ? `No clients found matching "${searchTerm}"`
+                    : "No clients available"}
+                </p>
+                <small>Check the search query or create a new client</small>
+              </div>
+              <Link
+                to="/clients/new"
+                className="button small primary client-combobox-add-btn"
+                onClick={() => setOpen(false)}
+              >
+                <Plus size={14} />
+                Add New Client
+              </Link>
+            </div>
+          )}
+
+          <div className="client-combobox-footer">
+            <Link
+              to="/clients/new"
+              className="client-combobox-footer-action"
+              onClick={() => setOpen(false)}
+            >
+              <UserPlus size={14} />
+              <span>+ Add New Client</span>
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export {
   ArrowRight,
   Plus,
