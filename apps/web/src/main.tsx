@@ -13,8 +13,9 @@ import { AuthContext, ErrorState, Loading, ToastContext } from "./components";
 import Shell from "./Shell";
 const Dashboard = lazy(() => import("./Dashboard"));
 import Clients from "./Clients";
+import Products from "./Products";
 import ClientProfile from "./ClientProfile";
-import ClientForm from "./ClientForm";
+import ClientForm, { NewClientPopup } from "./ClientForm";
 import ClientSuccess from "./ClientSuccess";
 import ImportClients from "./ImportClients";
 import Leads from "./Leads";
@@ -29,13 +30,21 @@ import {
 import {
   Engagement,
   Notifications,
-  Products,
+  ProductClients,
   Reports,
   Settings,
 } from "./Supporting";
 import Auth from "./Auth";
+import Providers from "./Providers";
+import CalendarPage from "./CalendarPage";
 import { ThemeProvider } from "./theme";
+import CustomCursor from "./CustomCursor";
+import SmoothScroll from "./SmoothScroll";
 import "./styles.css";
+import "./workspace.css";
+import "./reference-layout.css";
+import "./summary-cards.css";
+import "./green-theme.css";
 const client = new QueryClient({
   defaultOptions: {
     queries: { staleTime: 15000, refetchOnWindowFocus: false },
@@ -60,9 +69,12 @@ function App() {
   };
   return (
     <ToastContext.Provider value={notify}>
+      <CustomCursor />
+      <SmoothScroll />
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/login" element={<Auth />} />
+          <Route path="/signup" element={<Auth mode="signup" />} />
           <Route path="/forgot-password" element={<Auth mode="forgot" />} />
           <Route path="/reset-password" element={<Auth mode="reset" />} />
           <Route element={<Protected />}>
@@ -70,7 +82,7 @@ function App() {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="clients" element={<Clients />} />
-              <Route path="clients/new" element={<ClientForm />} />
+              <Route path="clients/new" element={<NewClientPopup />} />
               <Route path="clients/:id/success" element={<ClientSuccess />} />
               <Route path="clients/import" element={<ImportClients />} />
               <Route path="clients/:id" element={<ClientProfile />} />
@@ -89,7 +101,14 @@ function App() {
                 element={<NewRecord type="followups" />}
               />
               <Route path="followups/:id" element={<FollowupDetail />} />
+              <Route path="providers" element={<Providers />} />
+              <Route path="calendar" element={<CalendarPage />} />
               <Route path="products" element={<Products />} />
+              <Route
+                path="products/category/:category"
+                element={<ProductClients />}
+              />
+              <Route path="products/records" element={<ProductClients />} />
               <Route
                 path="products/new"
                 element={<NewRecord type="products" />}
@@ -133,11 +152,11 @@ function App() {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <BrowserRouter>
+      <BrowserRouter>
+        <ThemeProvider>
           <App />
-        </BrowserRouter>
-      </ThemeProvider>
+        </ThemeProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
 );

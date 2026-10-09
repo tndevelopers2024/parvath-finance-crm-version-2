@@ -1,21 +1,29 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import { Botanical, FormError, Submit } from "./components";
+import { FormError } from "./components";
 import { ThemeToggle } from "./theme";
 export default function Auth({
   mode = "login",
 }: {
-  mode?: "login" | "forgot" | "reset";
+  mode?: "login" | "forgot" | "reset" | "signup";
 }) {
   const navigate = useNavigate(),
     qc = useQueryClient(),
     [params] = useSearchParams(),
     [error, setError] = useState<Error>(),
     [busy, setBusy] = useState(false),
-    [message, setMessage] = useState("");
+    [message, setMessage] = useState(""),
+    [showPassword, setShowPassword] = useState(false);
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setBusy(true);
@@ -52,101 +60,169 @@ export default function Auth({
       setBusy(false);
     }
   };
+  const copy = {
+    signup: {
+      eyebrow: "JOIN YOUR TEAM",
+      title: "Your next chapter starts here.",
+      description: "Get access to your team’s Parvath FinServ workspace.",
+      action: "Back to sign in",
+      pending: "",
+    },
+    login: {
+      eyebrow: "YOUR WORKSPACE",
+      title: "Log in",
+      description: "Sign in to keep your client relationships moving forward.",
+      action: "Log in",
+      pending: "Signing in…",
+    },
+    forgot: {
+      eyebrow: "ACCOUNT RECOVERY",
+      title: "Let’s get you back in.",
+      description:
+        "Enter your work email and we’ll send you a password reset link.",
+      action: "Send reset link",
+      pending: "Sending link…",
+    },
+    reset: {
+      eyebrow: "A FRESH START",
+      title: "Set a new password.",
+      description: "Choose a strong password with at least 12 characters.",
+      action: "Update password",
+      pending: "Updating password…",
+    },
+  }[mode];
   return (
-    <div className="auth-page">
-      <div className="auth-theme-corner">
-        <ThemeToggle />
-      </div>
-      <div className="auth-brand">
-        <Link className="brand" to="/login">
-          <img src="/assets/logo.png" alt="" />
-          <span>
-            <strong>Parvath FinServ</strong>
-            <small>Your Financial Partner</small>
-          </span>
-        </Link>
-        <h1>
-          Strong relationships.
-          <br />
-          Secure tomorrows.
-        </h1>
-        <p>A thoughtful workspace for every financial relationship.</p>
-        <Botanical text="Grow Protect Invest Together" />
-      </div>
-      <div className="auth-card">
-        <span className="circle-icon mint">
-          <ShieldCheck size={30} />
-        </span>
-        <h1>
-          {mode === "login"
-            ? "Welcome back"
-            : mode === "forgot"
-              ? "Reset your password"
-              : "Choose a new password"}
-        </h1>
-        <p>
-          {mode === "login"
-            ? "Sign in to your Parvath FinServ workspace."
-            : "Secure access to your financial relationships."}
-        </p>
-        {message ? (
-          <div role="status" className="success-note">
-            {message}
-            <Link to="/login">Back to sign in</Link>
+    <main className="auth-page auth-redesign">
+      <div className="auth-frame">
+        <section className="auth-story" aria-label="Parvath FinServ">
+          <img
+            className="auth-hero-art"
+            src="/assets/financial-growth.png"
+            alt="An olive tree and golden coins on ascending green pillars, symbolizing financial growth"
+          />
+          <Link className="auth-logo" to="/login">
+            <img src="/assets/leaf-logo.png" alt="" />
+            <span>
+              <strong>Parvath FinServ</strong>
+              <small>Your Financial Partner</small>
+            </span>
+          </Link>
+        </section>
+        <section className="auth-form-panel">
+          <div className="auth-card">
+            {mode !== "login" && (
+              <span className="auth-eyebrow">{copy.eyebrow}</span>
+            )}
+            <h1>{copy.title}</h1>
+            <p>{copy.description}</p>
+            {mode === "signup" ? (
+              <div className="auth-signup-info">
+                <span className="auth-signup-badge">
+                  <ShieldCheck size={16} /> Administrator-managed access
+                </span>
+                <h2>Let’s get you connected.</h2>
+                <p>
+                  Ask your workspace administrator to create your account using
+                  your work email. Once you receive your sign-in details, you’re
+                  ready to get started.
+                </p>
+                <Link className="primary auth-signup-link" to="/login">
+                  Go to sign in <ArrowRight size={18} />
+                </Link>
+              </div>
+            ) : message ? (
+              <div role="status" className="success-note">
+                {message}
+                <Link to="/login">
+                  Back to sign in <ArrowRight size={16} />
+                </Link>
+              </div>
+            ) : (
+              <form onSubmit={submit}>
+                {mode !== "reset" && (
+                  <label htmlFor="auth-email">
+                    Work email
+                    <div className="auth-input-wrap">
+                      <Mail size={18} aria-hidden="true" />
+                      <input
+                        id="auth-email"
+                        name="email"
+                        type="email"
+                        autoComplete="username"
+                        required
+                        placeholder="you@company.com"
+                      />
+                    </div>
+                  </label>
+                )}
+                {mode !== "forgot" && (
+                  <label htmlFor="auth-password">
+                    <span className="auth-label-row">
+                      <span>
+                        {mode === "reset" ? "New password" : "Password"}
+                      </span>
+                    </span>
+                    <div className="auth-input-wrap">
+                      <LockKeyhole size={18} aria-hidden="true" />
+                      <input
+                        id="auth-password"
+                        aria-label={
+                          mode === "reset" ? "New password" : "Password"
+                        }
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete={
+                          mode === "login" ? "current-password" : "new-password"
+                        }
+                        minLength={mode === "reset" ? 12 : 1}
+                        maxLength={mode === "reset" ? 128 : 200}
+                        required
+                        placeholder={
+                          mode === "reset"
+                            ? "At least 12 characters"
+                            : "Enter your password"
+                        }
+                      />
+                      <button
+                        className="auth-password-toggle"
+                        type="button"
+                        aria-label={
+                          showPassword ? "Hide password" : "Show password"
+                        }
+                        aria-pressed={showPassword}
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} />
+                        ) : (
+                          <Eye size={18} />
+                        )}
+                      </button>
+                    </div>
+                  </label>
+                )}
+                <FormError error={error} />
+                <button
+                  className="primary auth-submit"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy ? copy.pending : copy.action}
+                  <ArrowRight size={18} />
+                </button>
+              </form>
+            )}
+            {mode !== "login" && mode !== "signup" && !message && (
+              <Link className="auth-back text-link" to="/login">
+                Back to sign in
+              </Link>
+            )}
           </div>
-        ) : (
-          <form onSubmit={submit}>
-            {mode !== "reset" && (
-              <label>
-                Email Address
-                <input
-                  name="email"
-                  type="email"
-                  autoComplete="username"
-                  required
-                  placeholder="you@company.com"
-                />
-              </label>
-            )}
-            {mode !== "forgot" && (
-              <label>
-                Password
-                <input
-                  name="password"
-                  type="password"
-                  autoComplete={
-                    mode === "login" ? "current-password" : "new-password"
-                  }
-                  minLength={mode === "reset" ? 12 : 1}
-                  required
-                  placeholder={
-                    mode === "reset"
-                      ? "At least 12 characters"
-                      : "Enter your password"
-                  }
-                />
-              </label>
-            )}
-            <FormError error={error} />
-            <Submit busy={busy}>
-              {mode === "login"
-                ? "Sign In"
-                : mode === "forgot"
-                  ? "Send Reset Link"
-                  : "Reset Password"}
-            </Submit>
-          </form>
-        )}
-        <Link
-          className="text-link"
-          to={mode === "login" ? "/forgot-password" : "/login"}
-        >
-          {mode === "login" ? "Forgot password?" : "Back to sign in"}
-        </Link>
-        <small className="auth-footer">
-          Private by design. Built around your relationships.
-        </small>
+        </section>
       </div>
-    </div>
+      <div className="auth-theme-bottom">
+        <ThemeToggle size={22} />
+      </div>
+    </main>
   );
 }

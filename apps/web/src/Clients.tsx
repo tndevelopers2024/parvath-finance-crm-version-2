@@ -33,6 +33,7 @@ export default function Clients() {
   const canDelete = user.role === "Administrator" || user.role === "Adviser";
   const write = useWrite();
   useEffect(() => {
+    if (location.pathname !== "/clients") return;
     sessionStorage.setItem(
       "parvath-directory-" + user.organizationId,
       location.pathname + location.search,
@@ -342,11 +343,22 @@ export default function Clients() {
                               <Link
                                 key={p.id}
                                 to={"/products/" + p.id}
-                                title={p.definition.category}
+                                title={`${p.definition.name} · ${p.definition.provider?.name || p.definition.category}`}
+                                aria-label={`View ${p.definition.name}`}
                               >
                                 <ProductIcon category={p.definition.category} />
                               </Link>
                             ))}
+                            {c.products.length > 3 && (
+                              <Link
+                                className="product-more-count"
+                                to={"/clients/" + c.id + "?tab=products"}
+                                title="View all client products"
+                                aria-label={`View all ${c.products.length} products for ${c.name}`}
+                              >
+                                +{c.products.length - 3}
+                              </Link>
+                            )}
                           </span>
                         </td>
                         <td>{date(next?.dueDate)}</td>
@@ -427,10 +439,7 @@ export default function Clients() {
         </Modal>
       )}
       {clientToDelete && (
-        <Modal
-          title="Delete Client"
-          onClose={() => setClientToDelete(null)}
-        >
+        <Modal title="Delete Client" onClose={() => setClientToDelete(null)}>
           <p style={{ margin: "0 0 14px" }}>
             Are you sure you want to permanently delete{" "}
             <strong>{clientToDelete.name}</strong>?

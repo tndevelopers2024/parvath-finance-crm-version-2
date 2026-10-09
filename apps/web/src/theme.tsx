@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Moon, Sun } from "lucide-react";
+import { useLocation } from "react-router-dom";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -17,13 +17,21 @@ export interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "light",
-  resolvedTheme: "light",
+  theme: "dark",
+  resolvedTheme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const systemOnly = [
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
+  ].includes(pathname);
+  const [authTheme, setAuthTheme] = useState<Theme>("dark");
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem("theme");
@@ -33,11 +41,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore local storage error */
     }
-    return "light";
+    return "dark";
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
     try {
+      if (systemOnly) {
+        return "dark";
+      }
       const stored = localStorage.getItem("theme");
       if (stored === "light" || stored === "dark") return stored;
       if (stored === "system") {
@@ -45,11 +56,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           ? "dark"
           : "light";
       }
-      return "light";
+      return "dark";
     } catch {
-      return "light";
+      return "dark";
     }
   });
+
+  const activeTheme = systemOnly ? authTheme : theme;
 
   useEffect(() => {
     const root = document.documentElement;
@@ -57,7 +70,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     const update = () => {
       const active: "light" | "dark" =
-        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+        activeTheme === "system"
+          ? media.matches
+            ? "dark"
+            : "light"
+          : activeTheme;
       setResolvedTheme(active);
       if (active === "dark") {
         root.classList.add("dark");
@@ -71,7 +88,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     update();
 
     const listener = () => {
-      if (theme === "system") {
+      if (activeTheme === "system") {
         update();
       }
     };
@@ -83,14 +100,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       (media as any).addListener(listener);
       return () => (media as any).removeListener(listener);
     }
-  }, [theme]);
+  }, [activeTheme]);
 
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
-    try {
-      localStorage.setItem("theme", newTheme);
-    } catch {
-      /* ignore */
+    if (systemOnly) {
+      setAuthTheme(newTheme);
+    } else {
+      setThemeState(newTheme);
+      try {
+        localStorage.setItem("theme", newTheme);
+      } catch {
+        /* ignore */
+      }
     }
     const root = document.documentElement;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -112,7 +133,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   return (
     <ThemeContext.Provider
-      value={{ theme, resolvedTheme, setTheme, toggleTheme }}
+      value={{ theme: activeTheme, resolvedTheme, setTheme, toggleTheme }}
     >
       {children}
     </ThemeContext.Provider>
@@ -145,7 +166,22 @@ export function ThemeToggle({
           : "Switch to dark mode"
       }
     >
-      {resolvedTheme === "dark" ? <Sun size={size} /> : <Moon size={size} />}
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 17v-1a5 5 0 1 1 6 0v1M9 20h6M10 23h4" />
+        {resolvedTheme === "light" && (
+          <path d="M12 1v2M3 11H1M23 11h-2M4.2 3.2l1.4 1.4M19.8 3.2l-1.4 1.4M4.2 18.8l1.4-1.4M19.8 18.8l-1.4-1.4" />
+        )}
+      </svg>
     </button>
   );
 }

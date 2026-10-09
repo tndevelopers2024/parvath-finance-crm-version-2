@@ -1,0 +1,34 @@
+.custom-cursor {
+  --cursor-dot: #173f35;
+  pointer-events: none;
+  opacity: 0;
+}
+.custom-cursor.visible { opacity: 1; }
+[data-theme="dark"] .custom-cursor,
+.custom-cursor.dark-surface {
+  --cursor-dot: #f3ece0;
+}
+.custom-cursor > span {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  will-change: transform;
+}
+.custom-cursor > span::after {
+  content: "";
+  display: block;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width .2s, height .2s, background-color .2s, border-color .2s, scale .12s;
+}
+.custom-cursor-dot::after {
+  width: 6px;
+  height: 6px;
+  background: var(--cursor-dot);
+}
+.custom-cursor.clicking .custom-cursor-dot::after { scale: .65; }
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .custom-cursor { display: none; }
+}

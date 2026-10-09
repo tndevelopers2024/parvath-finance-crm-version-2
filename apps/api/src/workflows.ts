@@ -53,7 +53,7 @@ workflows.post("/members", permit("admin"), async (req, res) => {
     .object({
       name: z.string().trim().min(2).max(100),
       email: z.email().transform((s) => s.toLowerCase()),
-      role: z.enum(["Administrator", "Adviser", "Operations"]),
+      role: z.literal("Administrator"),
       password: z.string().min(12).max(128),
     })
     .parse(req.body);
@@ -88,7 +88,7 @@ workflows.post("/members", permit("admin"), async (req, res) => {
 });
 workflows.patch("/members/:id", permit("admin"), async (req, res) => {
   const { role } = z
-    .object({ role: z.enum(["Administrator", "Adviser", "Operations"]) })
+    .object({ role: z.literal("Administrator") })
     .parse(req.body);
   const m = await db.membership.findFirst({
     where: {
@@ -105,6 +105,35 @@ workflows.patch("/members/:id", permit("admin"), async (req, res) => {
   });
   res.json({ data: { success: true } });
 });
+workflows.get("/providers", async (req, res) =>
+  res.json({
+    data: await db.provider.findMany({
+      where: { organizationId: req.auth.organizationId },
+      orderBy: { name: "asc" },
+    }),
+  }),
+);
+workflows.post("/providers", permit("admin"), async (req, res) => {
+  const { name } = z
+    .object({ name: z.string().trim().min(2).max(100) })
+    .parse(req.body);
+  const existing = (
+    await db.provider.findMany({
+      where: {
+        organizationId: req.auth.organizationId,
+        name: { contains: name, mode: "insensitive" },
+      },
+    })
+  ).find((row) => row.name.trim().toLowerCase() === name.toLowerCase());
+  if (existing)
+    return res
+      .status(409)
+      .json({ error: { message: "This provider already exists" } });
+  const provider = await db.provider.create({
+    data: { organizationId: req.auth.organizationId, name },
+  });
+  res.status(201).json({ data: provider });
+});
 workflows.get("/catalogue", async (req, res) =>
   res.json({
     data: await db.productDefinition.findMany({
@@ -117,7 +146,7 @@ workflows.get("/catalogue", async (req, res) =>
 workflows.post("/catalogue", permit("admin"), async (req, res) => {
   const v = z
     .object({
-      name: z.string().min(2).max(100),
+      name: z.string().trim().min(2).max(100),
       category: z.enum([
         "Life Insurance",
         "Health Insurance",
@@ -127,19 +156,41 @@ workflows.post("/catalogue", permit("admin"), async (req, res) => {
         "Investment",
         "Term Insurance",
       ]),
-      provider: z.string().min(2).max(100),
+      provider: z.string().trim().min(2).max(100).optional(),
+      providerId: z.uuid().optional(),
+    })
+    .refine((value) => !!value.providerId || !!value.provider, {
+      message: "Select a provider",
+      path: ["providerId"],
     })
     .parse(req.body);
-  const p = await db.provider.upsert({
-    where: {
-      organizationId_name: {
+  const p = v.providerId
+    ? await owned("provider", v.providerId, req)
+    : await db.provider.upsert({
+        where: {
+          organizationId_name: {
+            organizationId: req.auth.organizationId,
+            name: v.provider!,
+          },
+        },
+        create: { organizationId: req.auth.organizationId, name: v.provider },
+        update: {},
+      });
+  const duplicate = (
+    await db.productDefinition.findMany({
+      where: {
         organizationId: req.auth.organizationId,
-        name: v.provider,
+        providerId: p.id,
+        category: v.category,
+        name: { contains: v.name, mode: "insensitive" },
       },
-    },
-    create: { organizationId: req.auth.organizationId, name: v.provider },
-    update: {},
-  });
+    })
+  ).find((row) => row.name.trim().toLowerCase() === v.name.toLowerCase());
+  if (duplicate)
+    throw new HttpError(
+      409,
+      "This provider already has a product with this name in this category",
+    );
   res.status(201).json({
     data: await db.productDefinition.create({
       data: {
@@ -150,6 +201,94 @@ workflows.post("/catalogue", permit("admin"), async (req, res) => {
       },
     }),
   });
+});
+workflows.patch("/providers/:id", permit("admin"), async (req, res) => {
+  const old = await owned("provider", String(req.params.id), req);
+  const { name } = z
+    .object({ name: z.string().trim().min(2).max(100) })
+    .parse(req.body);
+  const duplicate = (
+    await db.provider.findMany({
+      where: {
+        organizationId: req.auth.organizationId,
+        name: { contains: name, mode: "insensitive" },
+      },
+    })
+  ).find(
+    (row) =>
+      row.name.trim().toLowerCase() === name.toLowerCase() && row.id !== old.id,
+  );
+  if (duplicate && duplicate.id !== old.id)
+    throw new HttpError(409, "This provider already exists");
+  res.json({
+    data: await db.provider.update({ where: { id: old.id }, data: { name } }),
+  });
+});
+workflows.delete("/providers/:id", permit("admin"), async (req, res) => {
+  const old = await owned("provider", String(req.params.id), req);
+  if (await db.productDefinition.count({ where: { providerId: old.id } }))
+    throw new HttpError(409, "Remove this provider's product plans first");
+  await db.provider.delete({ where: { id: old.id } });
+  res.json({ data: { success: true } });
+});
+workflows.patch("/catalogue/:id", permit("admin"), async (req, res) => {
+  const old = await owned("productDefinition", String(req.params.id), req);
+  const v = z
+    .object({
+      name: z.string().trim().min(2).max(100),
+      providerId: z.uuid(),
+      category: z.enum([
+        "Life Insurance",
+        "Health Insurance",
+        "Vehicle Insurance",
+        "Home Loan",
+        "Business Loan",
+        "Investment",
+        "Term Insurance",
+      ]),
+    })
+    .parse(req.body);
+  await owned("provider", v.providerId, req);
+  if (
+    v.category !== old.category &&
+    (await db.clientProduct.count({ where: { definitionId: old.id } }))
+  )
+    throw new HttpError(
+      409,
+      "The category cannot change while client records use this plan",
+    );
+  const duplicate = (
+    await db.productDefinition.findMany({
+      where: {
+        organizationId: req.auth.organizationId,
+        providerId: v.providerId,
+        category: v.category,
+        name: { contains: v.name, mode: "insensitive" },
+      },
+    })
+  ).find(
+    (row) =>
+      row.name.trim().toLowerCase() === v.name.toLowerCase() &&
+      row.id !== old.id,
+  );
+  if (duplicate && duplicate.id !== old.id)
+    throw new HttpError(
+      409,
+      "This provider already has a product with this name in this category",
+    );
+  res.json({
+    data: await db.productDefinition.update({ where: { id: old.id }, data: v }),
+  });
+});
+workflows.delete("/catalogue/:id", permit("admin"), async (req, res) => {
+  const old = await owned("productDefinition", String(req.params.id), req);
+  if (await db.clientProduct.count({ where: { definitionId: old.id } }))
+    throw new HttpError(
+      409,
+      "This plan has client records and cannot be deleted",
+    );
+  await db.productDefinition.delete({ where: { id: old.id } });
+  res.json({ data: { success: true } });
 });
 workflows.get("/leads", async (req, res) => {
   const p = safePage(req.query);
@@ -409,9 +548,99 @@ workflows.post("/leads/:id/convert", permit("edit"), async (req, res) => {
   });
   res.json({ data: product });
 });
+workflows.get("/products/summary", async (req, res) => {
+  const rows = await db.clientProduct.findMany({
+    where: { organizationId: req.auth.organizationId },
+    include: { definition: true },
+  });
+  const categories = new Map<
+    string,
+    { clients: Set<string>; records: number; active: number }
+  >();
+  const productTotals = new Map<
+    string,
+    {
+      clients: Set<string>;
+      records: number;
+      active: number;
+      applications: number;
+      closed: number;
+    }
+  >();
+  for (const row of rows) {
+    const totals = productTotals.get(row.definitionId) || {
+      clients: new Set<string>(),
+      records: 0,
+      active: 0,
+      applications: 0,
+      closed: 0,
+    };
+    totals.clients.add(row.clientId);
+    totals.records++;
+    if (row.status === "Active") totals.active++;
+    if (row.status === "Application") totals.applications++;
+    if (row.status === "Closed") totals.closed++;
+    productTotals.set(row.definitionId, totals);
+    const category = row.definition.category;
+    const summary = categories.get(category) || {
+      clients: new Set<string>(),
+      records: 0,
+      active: 0,
+    };
+    summary.clients.add(row.clientId);
+    summary.records++;
+    if (row.status === "Active") summary.active++;
+    categories.set(category, summary);
+  }
+  res.json({
+    products: Array.from(productTotals, ([definitionId, totals]) => ({
+      definitionId,
+      clients: totals.clients.size,
+      records: totals.records,
+      active: totals.active,
+      applications: totals.applications,
+      closed: totals.closed,
+    })),
+    data: Array.from(categories, ([category, value]) => ({
+      category,
+      clients: value.clients.size,
+      records: value.records,
+      active: value.active,
+    })),
+  });
+});
 workflows.get("/products", async (req, res) => {
   const p = safePage(req.query);
+  const filters = z
+    .object({
+      status: productSchema.shape.status.optional(),
+      category: z.string().trim().min(1).max(100).optional(),
+      definitionId: z.uuid().optional(),
+    })
+    .parse(req.query);
+  const categoryDefinitions = filters.category
+    ? await db.productDefinition.findMany({
+        where: {
+          organizationId: req.auth.organizationId,
+          category: filters.category,
+        },
+        select: { id: true },
+      })
+    : undefined;
+  const allowedDefinitionIds = categoryDefinitions?.map((item) => item.id);
   const where = {
+    ...(filters.definitionId
+      ? {
+          definitionId:
+            allowedDefinitionIds &&
+            !allowedDefinitionIds.includes(filters.definitionId)
+              ? { in: [] }
+              : filters.definitionId,
+        }
+      : allowedDefinitionIds
+        ? { definitionId: { in: allowedDefinitionIds } }
+        : {}),
+    ...(filters.status ? { status: filters.status } : {}),
     organizationId: req.auth.organizationId,
     ...(req.query.clientId
       ? { clientId: z.uuid().parse(req.query.clientId) }
@@ -419,6 +648,11 @@ workflows.get("/products", async (req, res) => {
     ...(p.q
       ? {
           OR: [
+            {
+              definition: {
+                name: { contains: p.q, mode: "insensitive" as const },
+              },
+            },
             { identifier: { contains: p.q, mode: "insensitive" as const } },
             {
               client: {

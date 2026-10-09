@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import CatalogueActions from "./CatalogueActions";
+import { useEffect, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Bell,
   CalendarDays,
@@ -26,6 +32,8 @@ import {
   Modal,
   PageHeading,
   Panel,
+  Pagination,
+  Tabs,
   ProductIcon,
   SearchInput,
   Submit,
@@ -33,85 +41,421 @@ import {
   useToast,
 } from "./components";
 import { useTheme } from "./theme";
-export function Products() {
-  const [params, setParams] = useSearchParams(),
-    q = useData("/products?" + params.toString());
+export function ProductClients({
+  category: selectedCategory,
+}: { category?: string } = {}) {
+  const { category: routeCategory } = useParams();
+  const [params, setParams] = useSearchParams();
+  const user = useAuth();
+  const [productsOpen, setProductsOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const category =
+    selectedCategory || routeCategory || params.get("category") || "";
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const requestParams = new URLSearchParams();
+  if (category) requestParams.set("category", category);
+  for (const key of ["q", "definitionId", "clientId"]) {
+    const value = params.get(key);
+    if (value) requestParams.set(key, value);
+  }
+  const status = params.get("status");
+  if (status && status !== "All") requestParams.set("status", status);
+  requestParams.set("limit", "25");
+  requestParams.set("page", String(page));
+  const q = useData("/products?" + requestParams.toString());
+  useEffect(() => {
+    if (q.data && page > 1 && !q.data.data.length && q.data.meta.total > 0) {
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          next.delete("page");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [q.data, page, setParams]);
+  const catalogue = useData("/catalogue");
+  const productSummary = useData("/products/summary", productsOpen);
+  const availableProducts = (catalogue.data?.data || []).filter(
+    (item: any) =>
+      item.category === category &&
+      `${item.name} ${item.provider.name}`
+        .toLowerCase()
+        .includes(productSearch.trim().toLowerCase()),
+  );
+  const categories = [
+    ...new Set<string>(
+      (catalogue.data?.data || []).map((p: any) => p.category),
+    ),
+  ].sort();
+  const change = (key: string, value: string) =>
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      if (key !== "page") next.delete("page");
+      return next;
+    });
+  const filtered = [
+    "q",
+    "definitionId",
+    "status",
+    ...(!routeCategory && !selectedCategory ? ["category"] : []),
+  ].some((key) => params.has(key));
   return (
-    <>
+    <div className="products-page">
+      <Link className="text-link catalogue-back" to="/products">
+        ← Back to products
+      </Link>
       <PageHeading
-        title="Products"
-        subtitle="Policies, accounts and applications, connected to the right client."
+        title={category || "Client policies & accounts"}
+        subtitle={
+          category
+            ? `Clients and their ${category.toLowerCase()} policies or accounts.`
+            : "View all client policies and accounts across your products."
+        }
         actions={
-          <Link className="button primary" to="/products/new">
-            <Plus size={16} />
-            Add Product
-          </Link>
+          <>
+            {user.role !== "Operations" &&
+              (!category ||
+                catalogue.isPending ||
+                catalogue.data?.data.some(
+                  (item: any) => item.category === category,
+                ) ||
+                user.role === "Administrator") && (
+                <Link
+                  className="button primary"
+                  to={
+                    category &&
+                    !catalogue.isPending &&
+                    !catalogue.data?.data.some(
+                      (item: any) => item.category === category,
+                    )
+                      ? "/products?" + query({ setup: category })
+                      : "/products/new?" +
+                        query({
+                          category: category || undefined,
+                          definitionId: params.get("definitionId") || undefined,
+                        })
+                  }
+                >
+                  <Plus size={16} />
+                  {category &&
+                  !catalogue.isPending &&
+                  !catalogue.data?.data.some(
+                    (item: any) => item.category === category,
+                  )
+                    ? "Set up product option"
+                    : "Add client"}
+                </Link>
+              )}
+            {category && (
+              <button className="button" onClick={() => setProductsOpen(true)}>
+                Product plans
+              </button>
+            )}
+            {category && (
+              <Link className="button" to={"/providers?" + query({ category })}>
+                Providers
+              </Link>
+            )}
+          </>
         }
       />
-      <Panel>
-        <div className="filters">
-          <SearchInput
-            value={params.get("q") || ""}
-            onChange={(v) => setParams({ q: v })}
-            placeholder="Search by client or account identifier..."
-          />
-        </div>
-        {q.isPending ? (
-          <Loading />
-        ) : q.error ? (
-          <ErrorState error={q.error} />
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Product</th>
-                  <th>Provider</th>
-                  <th>Identifier</th>
-                  <th>Annual Premium</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {q.data.data.map((p: any) => (
-                  <tr key={p.id}>
-                    <td>
-                      <Link
-                        className="person-cell"
-                        to={"/clients/" + p.clientId}
-                      >
-                        <Avatar name={p.client.name} />
-                        <strong>{p.client.name}</strong>
-                      </Link>
-                    </td>
-                    <td>
-                      <Link className="product-cell" to={"/products/" + p.id}>
-                        <ProductIcon category={p.definition.category} />
-                        {p.definition.category}
-                      </Link>
-                    </td>
-                    <td>{p.definition.provider.name}</td>
-                    <td>
-                      <Link to={"/products/" + p.id}>{p.identifier}</Link>
-                    </td>
-                    <td>
-                      {p.premiumMinor
-                        ? rupees(p.premiumMinor)
-                        : "Not applicable"}
-                    </td>
-                    <td>
-                      <Badge>{p.status}</Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {!q.data.data.length && <Empty />}
-          </div>
+      <div className={"product-records-workspace"}>
+        {category && productsOpen && (
+          <Modal
+            title="Product plans"
+            className="available-products-popup"
+            headerActions={
+              <>
+                <SearchInput
+                  value={productSearch}
+                  onChange={setProductSearch}
+                  placeholder="Search products or providers..."
+                />
+                {user.role === "Administrator" && (
+                  <Link
+                    className="button primary"
+                    to={"/products?" + query({ setup: category })}
+                  >
+                    <Plus size={14} /> Add new product
+                  </Link>
+                )}
+              </>
+            }
+            onClose={() => setProductsOpen(false)}
+          >
+            <div className="available-product-plans">
+              {catalogue.isPending ? (
+                <Loading />
+              ) : catalogue.error ? (
+                <ErrorState error={catalogue.error} />
+              ) : (
+                <>
+                  <div className="available-plans-list">
+                    {availableProducts.map((item: any) => {
+                      const totals = productSummary.data?.products?.find(
+                        (value: any) => value.definitionId === item.id,
+                      );
+                      const selected = params.get("definitionId") === item.id;
+                      return (
+                        <article
+                          className={
+                            "detailed-product " + (selected ? "selected" : "")
+                          }
+                          key={item.id}
+                        >
+                          <div className="detailed-product-heading">
+                            <strong>{item.name}</strong>
+                            {selected && <Badge>Selected</Badge>}
+                          </div>
+                          <span className="compact-product-provider">
+                            {item.provider.name}
+                          </span>
+                          {productSummary.isPending ? (
+                            <Loading layout="inline" />
+                          ) : productSummary.error ? (
+                            <p className="muted">Client counts unavailable</p>
+                          ) : (
+                            <div className="detailed-product-counts">
+                              <span>
+                                <strong>{totals?.clients || 0}</strong>Clients
+                              </span>
+                              <span>
+                                <strong>{totals?.active || 0}</strong>Active
+                              </span>
+                              <span>
+                                <strong>{totals?.applications || 0}</strong>
+                                Applications
+                              </span>
+                              <span>
+                                <strong>{totals?.closed || 0}</strong>Closed
+                              </span>
+                            </div>
+                          )}
+                          <div className="detailed-product-actions">
+                            {user.role === "Administrator" && (
+                              <CatalogueActions
+                                record={item}
+                                type="catalogue"
+                              />
+                            )}
+                            <button
+                              onClick={() => {
+                                change("definitionId", item.id);
+                                setProductsOpen(false);
+                              }}
+                            >
+                              View clients
+                            </button>
+                            {user.role !== "Operations" && (
+                              <Link
+                                className="button primary"
+                                to={
+                                  "/products/new?" +
+                                  query({ category, definitionId: item.id })
+                                }
+                              >
+                                <Plus size={14} /> Add client
+                              </Link>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  {productSearch.trim() && !availableProducts.length && (
+                    <p className="muted">No products match your search.</p>
+                  )}
+                  {!catalogue.data?.data.some(
+                    (item: any) => item.category === category,
+                  ) && <p>No plans have been added in this category yet.</p>}
+                </>
+              )}
+            </div>
+          </Modal>
         )}
-      </Panel>
-    </>
+        <Panel className="product-register">
+          <div className="register-heading">
+            <div>
+              <h2>
+                {category
+                  ? catalogue.data?.data.find(
+                      (item: any) => item.id === params.get("definitionId"),
+                    )?.name || "Client policies in this category"
+                  : "All client records"}
+              </h2>
+              <p>
+                Open a client profile or view their policy and account details.
+              </p>
+            </div>
+            {q.data && (
+              <span className="register-count">
+                {q.data.meta.total} {filtered ? "matching " : ""}records
+              </span>
+            )}
+          </div>
+          <Tabs
+            items={["All", "Active", "Application", "Closed"]}
+            value={params.get("status") || "All"}
+            onChange={(value) => change("status", value)}
+          />
+          <div className="product-toolbar">
+            <SearchInput
+              value={params.get("q") || ""}
+              onChange={(value) => change("q", value)}
+              placeholder="Search product, client or identifier..."
+            />
+            {!routeCategory && !selectedCategory && (
+              <label className="product-category">
+                Category
+                <select
+                  value={params.get("category") || ""}
+                  onChange={(e) => change("category", e.target.value)}
+                >
+                  <option value="">All categories</option>
+                  {categories.map((value) => (
+                    <option key={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {filtered && (
+              <button
+                type="button"
+                className="product-reset"
+                onClick={() =>
+                  setParams((previous) => {
+                    const next = new URLSearchParams(previous);
+                    ["q", "definitionId", "status", "page"].forEach((key) =>
+                      next.delete(key),
+                    );
+                    return next;
+                  })
+                }
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+          {q.isPending ? (
+            <Loading />
+          ) : q.error ? (
+            <ErrorState error={q.error} retry={q.refetch} />
+          ) : q.data.data.length ? (
+            <>
+              <div className="table-scroll">
+                <table className="products-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Policy / account</th>
+                      <th>Value</th>
+                      <th>Status</th>
+                      <th>
+                        <span className="sr-only">Open record</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {q.data.data.map((p: any) => (
+                      <tr key={p.id}>
+                        <td data-label="Client">
+                          <Link
+                            className="person-cell"
+                            to={"/clients/" + p.clientId}
+                          >
+                            <Avatar name={p.client.name} />
+                            <strong>{p.client.name}</strong>
+                          </Link>
+                        </td>
+                        <td data-label="Product">
+                          <Link
+                            className="product-record"
+                            to={"/products/" + p.id}
+                          >
+                            <ProductIcon category={p.definition.category} />
+                            <span>
+                              <strong>{p.definition.name}</strong>
+                              <small>
+                                {p.definition.provider.name} · {p.identifier}
+                              </small>
+                            </span>
+                          </Link>
+                        </td>
+                        <td data-label="Value">
+                          {p.premiumMinor != null ? (
+                            <>
+                              <strong>{rupees(p.premiumMinor)}</strong>
+                              <small>Annual premium</small>
+                            </>
+                          ) : p.principalMinor != null ? (
+                            <>
+                              <strong>{rupees(p.principalMinor)}</strong>
+                              <small>Principal</small>
+                            </>
+                          ) : (
+                            <span className="muted">Not recorded</span>
+                          )}
+                        </td>
+                        <td data-label="Status">
+                          <Badge>{p.status}</Badge>
+                        </td>
+                        <td>
+                          <Link
+                            className="text-link"
+                            aria-label={"View " + p.identifier}
+                            to={"/products/" + p.id}
+                          >
+                            View details →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination
+                total={q.data.meta.total}
+                page={page}
+                limit={25}
+                onChange={(value) => change("page", String(value))}
+              />
+            </>
+          ) : (
+            <div className="product-empty">
+              <Empty
+                action={
+                  filtered ? (
+                    <button
+                      className="button"
+                      onClick={() =>
+                        setParams((previous) => {
+                          const next = new URLSearchParams(previous);
+                          ["q", "status", "page"].forEach((key) =>
+                            next.delete(key),
+                          );
+                          return next;
+                        })
+                      }
+                    >
+                      Show all linked records
+                    </button>
+                  ) : undefined
+                }
+                text={
+                  filtered
+                    ? "No products match these filters. Try another search or clear the filters."
+                    : "No clients have been added here yet. Use Add client to choose an existing client or create a new one."
+                }
+              />
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
   );
 }
 export function Engagement({ compose = false }: { compose?: boolean }) {
@@ -376,6 +720,34 @@ export function Reports() {
           },
         ]}
       />
+      {d.bins?.length > 0 && (
+        <Panel
+          title="Renewal outlook"
+          action={
+            <Link className="text-link" to="/renewals?range=Next+30+Days">
+              View renewals →
+            </Link>
+          }
+          className="renewal-outlook"
+        >
+          <p>Pending financial events over the next 30 days.</p>
+          <div className="outlook-chart">
+            {d.bins.map((bin: { name: string; count: number }) => (
+              <div className="outlook-row" key={bin.name}>
+                <span>{bin.name}</span>
+                <div className="outlook-track" aria-hidden="true">
+                  <div
+                    style={{
+                      width: `${(bin.count / Math.max(1, ...d.bins.map((b: { count: number }) => b.count))) * 100}%`,
+                    }}
+                  />
+                </div>
+                <strong>{bin.count}</strong>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
       <Panel title="Operational Exports">
         <p>
           Exports contain authorized workspace records. Currency amounts are
@@ -464,17 +836,17 @@ export function Reports() {
     </>
   );
 }
-export function Notifications() {
+export function Notifications({ onClose }: { onClose?: () => void } = {}) {
   const q = useData("/notifications"),
     write = useWrite(),
     navigate = useNavigate();
   return (
     <>
-      <PageHeading
+      {!onClose && <PageHeading
         title="Notifications"
         subtitle="Your reminders and workspace updates."
-      />
-      <Panel>
+      />}
+      <Panel className="notifications-list">
         {q.isPending ? (
           <Loading />
         ) : q.error ? (
@@ -490,12 +862,13 @@ export function Notifications() {
                 await write.mutateAsync({
                   path: `/notifications/${n.id}/read`,
                 });
+                onClose?.();
                 navigate(n.link);
               }}
             >
               <Bell size={22} />
-              <span>
-                <strong>{n.title}</strong>
+              <span className="notification-copy">
+                <strong title={n.title}>{n.title}</strong>
                 <small>{date(n.createdAt)}</small>
               </span>
               {!n.readAt && <Badge>New</Badge>}
@@ -505,256 +878,299 @@ export function Notifications() {
           <Empty text="You’re all caught up" />
         )}
       </Panel>
+      <FormError error={write.error} />
     </>
   );
 }
 export function Settings() {
   const user = useAuth(),
     write = useWrite(),
-    toast = useToast(),
-    { theme, resolvedTheme, setTheme } = useTheme(),
-    jobs = useData("/jobs", user.role === "Administrator"),
-    members = useData("/members"),
-    catalogue = useData("/catalogue");
+    toast = useToast();
+  const { theme, setTheme } = useTheme();
+  const [section, setSection] = useState("Profile");
+  const [localError, setLocalError] = useState("");
+  const members = useData("/members", section === "Team");
+  const sections = ["Profile", "Security", "Appearance", "Team"];
+  const save = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError("");
+    const form = event.currentTarget;
+    const fields = Object.fromEntries(new FormData(form));
+    if (
+      section === "Security" &&
+      fields.newPassword !== fields.confirmPassword
+    ) {
+      setLocalError("New passwords do not match.");
+      return;
+    }
+    try {
+      await write.mutateAsync({
+        path: "/auth/account",
+        method: "PATCH",
+        body: {
+          name: section === "Profile" ? fields.name : user.name,
+          currentPassword: fields.currentPassword,
+          ...(section === "Security"
+            ? { newPassword: fields.newPassword }
+            : {}),
+        },
+      });
+      form
+        .querySelectorAll<HTMLInputElement>('input[type="password"]')
+        .forEach((input) => {
+          input.value = "";
+        });
+      toast(section === "Profile" ? "Profile updated" : "Password updated");
+    } catch {
+      /* FormError displays the response. */
+    }
+  };
   return (
-    <>
+    <div className="settings-page">
       <PageHeading
         title="Settings"
-        subtitle="Manage your account and understand your workspace configuration."
+        subtitle="Manage your account, preferences and workspace team."
       />
-      <div className="detail-layout">
-        <Panel title="Your Account">
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const f = Object.fromEntries(new FormData(e.currentTarget));
-              if (!f.newPassword) delete f.newPassword;
-              try {
-                await write.mutateAsync({
-                  path: "/auth/account",
-                  method: "PATCH",
-                  body: f,
-                });
-                toast("Account updated");
-              } catch {
-                /* Render error */
-              }
-            }}
-          >
-            <label>
-              Name
-              <input name="name" defaultValue={user.name} required />
-            </label>
-            <label>
-              Email
-              <input disabled value={user.email} />
-            </label>
-            <label>
-              Current Password
-              <input
-                name="currentPassword"
-                required
-                type="password"
-                autoComplete="current-password"
-              />
-            </label>
-            <label>
-              New Password (optional, 12+ characters)
-              <input
-                name="newPassword"
-                type="password"
-                minLength={12}
-                autoComplete="new-password"
-              />
-            </label>
-            <FormError error={write.error} />
-            <Submit busy={write.isPending} />
-          </form>
-        </Panel>
-        <div>
-          <Panel title="Appearance">
-            <p className="muted" style={{ marginBottom: 12 }}>
-              Choose your preferred visual theme for the CRM.
-            </p>
-            <div className="segmented">
-              <button
-                type="button"
-                className={theme === "light" ? "primary" : ""}
-                onClick={() => setTheme("light")}
-              >
-                <Sun size={15} /> Light
-              </button>
-              <button
-                type="button"
-                className={theme === "system" ? "primary" : ""}
-                onClick={() => setTheme("system")}
-              >
-                <Laptop size={15} /> System
-              </button>
-              <button
-                type="button"
-                className={theme === "dark" ? "primary" : ""}
-                onClick={() => setTheme("dark")}
-              >
-                <Moon size={15} /> Dark
-              </button>
-            </div>
-            <p className="muted" style={{ marginTop: 10, fontSize: 11 }}>
-              {theme === "system"
-                ? `System mode is currently resolving to ${resolvedTheme === "dark" ? "Dark" : "Light"} based on browser preference. Click "Dark" to enable Dark mode directly.`
-                : theme === "dark"
-                  ? "Dark mode active."
-                  : "Light mode active."}
-            </p>
-          </Panel>
-          <Panel title="Workspace">
-            <dl className="info-list">
-              <div>
-                <dt>Role</dt>
-                <dd>{user.role}</dd>
-              </div>
-              <div>
-                <dt>Timezone</dt>
-                <dd>{user.timezone}</dd>
-              </div>
-              <div>
-                <dt>Clock</dt>
-                <dd>
-                  {user.demoDate
-                    ? "Demo: " + date(user.demoDate)
-                    : "Live production clock"}
-                </dd>
-              </div>
-              <div>
-                <dt>Messaging</dt>
-                <dd>Manual / deep-link provider</dd>
-              </div>
-              <div>
-                <dt>Documents</dt>
-                <dd>Private S3; scanning required</dd>
-              </div>
-            </dl>
-          </Panel>
-          <Panel
-            title="Team"
-            action={
-              user.role === "Administrator" ? <MemberManager /> : undefined
-            }
-          >
-            {members.data?.data.map((m: any) => (
-              <div className="record-row" key={m.user.id}>
-                <Avatar name={m.user.name} />
-                <span>
-                  <strong>{m.user.name}</strong>
-                  <small>{m.role}</small>
-                </span>
-                {user.role === "Administrator" && m.user.id !== user.userId && (
-                  <select
-                    aria-label={"Role for " + m.user.name}
-                    className="role-select"
-                    value={m.role}
-                    onChange={async (e) => {
-                      try {
-                        await write.mutateAsync({
-                          path: "/members/" + m.id,
-                          method: "PATCH",
-                          body: { role: e.target.value },
-                        });
-                        toast("Role updated");
-                      } catch {
-                        /* Render error */
-                      }
-                    }}
-                  >
-                    <option>Administrator</option>
-                    <option>Adviser</option>
-                    <option>Operations</option>
-                  </select>
-                )}
-              </div>
-            ))}
-          </Panel>
-        </div>
-      </div>
-      {user.role === "Administrator" && (
-        <>
-          <Panel title="Product Catalogue">
-            <form
-              className="inline-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const f = Object.fromEntries(new FormData(e.currentTarget));
-                try {
-                  await write.mutateAsync({ path: "/catalogue", body: f });
-                  toast("Catalogue item added");
-                } catch {
-                  /* Render error */
-                }
+      <div className="settings-workspace">
+        <aside className="settings-navigation" aria-label="Settings sections">
+          <span className="settings-nav-caption">YOUR WORKSPACE</span>
+          {sections.map((item) => (
+            <button
+              key={item}
+              type="button"
+              aria-current={section === item ? "page" : undefined}
+              onClick={() => {
+                setSection(item);
+                write.reset();
+                setLocalError("");
               }}
             >
-              <label>
-                Product name
-                <input name="name" required minLength={2} />
-              </label>
-              <label>
-                Provider
-                <input name="provider" required minLength={2} />
-              </label>
-              <label>
-                Category
-                <select name="category">
-                  {[
-                    "Life Insurance",
-                    "Health Insurance",
-                    "Vehicle Insurance",
-                    "Home Loan",
-                    "Business Loan",
-                    "Investment",
-                    "Term Insurance",
-                  ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
-              <Submit busy={write.isPending}>Add product definition</Submit>
-            </form>
-            <p className="muted">
-              {catalogue.data?.data.length || 0} product definitions. Catalogue
-              items are separate from client policies.
-            </p>
-          </Panel>
-          <Panel title="Background Jobs & Failures">
-            {jobs.data?.data.length ? (
-              jobs.data.data.map((j: any) => (
-                <div className="record-row" key={j.id}>
-                  <Badge>{j.state}</Badge>
-                  <span>
-                    <strong>{j.type}</strong>
-                    <small>
-                      {date(j.runAt)} · Attempts {j.attempts} · {j.lastError}
-                    </small>
-                  </span>
-                  {j.state === "failed" && (
-                    <button
-                      onClick={async () => {
-                        await write.mutateAsync({
-                          path: `/jobs/${j.id}/retry`,
-                        });
-                        toast("Job queued for retry");
-                      }}
-                    >
-                      Retry
-                    </button>
-                  )}
+              {item}
+              <span>
+                {item === "Profile"
+                  ? "Personal details"
+                  : item === "Security"
+                    ? "Password and access"
+                    : item === "Appearance"
+                      ? "Theme preferences"
+                      : "Members and roles"}
+              </span>
+            </button>
+          ))}
+          <div className="settings-identity">
+            <Avatar name={user.name} />
+            <div>
+              <strong>{user.name}</strong>
+              <small>{user.role}</small>
+            </div>
+          </div>
+        </aside>
+        <div className="settings-content">
+          {section === "Profile" && (
+            <Panel title="Profile details">
+              <p className="settings-description">
+                Your name appears on assigned clients, follow-ups and workspace
+                activity.
+              </p>
+              <div className="settings-profile-summary">
+                <Avatar name={user.name} />
+                <div>
+                  <strong>{user.name}</strong>
+                  <small>{user.email}</small>
                 </div>
-              ))
-            ) : (
-              <Empty text="No background jobs yet" />
-            )}
-          </Panel>
-        </>
-      )}
-    </>
+                <Badge>{user.role}</Badge>
+              </div>
+              <form key="profile" className="settings-form" onSubmit={save}>
+                <label>
+                  Full name
+                  <input
+                    name="name"
+                    defaultValue={user.name}
+                    required
+                    minLength={2}
+                    maxLength={100}
+                    autoComplete="name"
+                  />
+                </label>
+                <label>
+                  Email address
+                  <input value={user.email} disabled />
+                  <small>
+                    Contact your administrator to change your account email.
+                  </small>
+                </label>
+                <label>
+                  Current password
+                  <input
+                    name="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                  <small>
+                    Confirm your password to save changes to your profile.
+                  </small>
+                </label>
+                <FormError error={write.error} />
+                <div className="settings-form-footer">
+                  <Submit busy={write.isPending}>Save profile</Submit>
+                </div>
+              </form>
+            </Panel>
+          )}
+          {section === "Security" && (
+            <Panel title="Change password">
+              <p className="settings-description">
+                Choose a password with at least 12 characters. Updating it signs
+                out your other sessions.
+              </p>
+              <form key="security" className="settings-form" onSubmit={save}>
+                <label>
+                  Current password
+                  <input
+                    name="currentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </label>
+                <label>
+                  New password
+                  <input
+                    name="newPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                  />
+                </label>
+                <label>
+                  Confirm new password
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={12}
+                    maxLength={128}
+                  />
+                </label>
+                {localError && <p role="alert">{localError}</p>}
+                <FormError error={write.error} />
+                <div className="settings-form-footer">
+                  <Submit busy={write.isPending}>Update password</Submit>
+                </div>
+              </form>
+            </Panel>
+          )}
+          {section === "Appearance" && (
+            <Panel title="Appearance">
+              <p className="settings-description">
+                Choose how your workspace looks. This preference is saved on
+                this browser.
+              </p>
+              <div className="settings-theme-options">
+                {(["light", "dark", "system"] as const).map((value) => (
+                  <button
+                    type="button"
+                    key={value}
+                    aria-pressed={theme === value}
+                    className={`settings-theme-option ${theme === value ? "selected" : ""}`}
+                    onClick={() => setTheme(value)}
+                  >
+                    <span className={`settings-theme-preview ${value}`}>
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    <span className="settings-theme-label">
+                      {value === "light" ? (
+                        <Sun size={16} />
+                      ) : value === "dark" ? (
+                        <Moon size={16} />
+                      ) : (
+                        <Laptop size={16} />
+                      )}
+                      {value === "system"
+                        ? "System"
+                        : value === "dark"
+                          ? "Dark"
+                          : "Light"}
+                      {theme === value && <CheckSquare size={16} />}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="settings-description">
+                System follows your device’s light or dark appearance.
+              </p>
+            </Panel>
+          )}
+          {section === "Team" && (
+            <>
+              {members.isPending ? (
+                <Loading />
+              ) : members.error ? (
+                <ErrorState error={members.error} retry={members.refetch} />
+              ) : (
+                <>
+                  <p className="settings-description">
+                    Manage who has access to your workspace and their role.
+                  </p>
+                  <Panel
+                    title="Team"
+                    action={
+                      user.role === "Administrator" ? (
+                        <MemberManager />
+                      ) : undefined
+                    }
+                  >
+                    {members.data?.data.map((m: any) => (
+                      <div className="record-row" key={m.user.id}>
+                        <Avatar name={m.user.name} />
+                        <span>
+                          <strong>{m.user.name}</strong>
+                          <small>{m.role}</small>
+                        </span>
+                        {user.role === "Administrator" &&
+                          m.user.id !== user.userId && (
+                            <select
+                              aria-label={"Role for " + m.user.name}
+                              className="role-select"
+                              value={m.role}
+                              onChange={async (e) => {
+                                try {
+                                  await write.mutateAsync({
+                                    path: "/members/" + m.id,
+                                    method: "PATCH",
+                                    body: { role: e.target.value },
+                                  });
+                                  toast("Role updated");
+                                } catch {
+                                  /* Render error */
+                                }
+                              }}
+                            >
+                              <option>Administrator</option>
+                            </select>
+                          )}
+                      </div>
+                    ))}
+                  </Panel>
+                  <FormError error={write.error} />
+                </>
+              )}
+            </>
+          )}
+          <div className="settings-context">
+            <span>Workspace timezone</span>
+            <strong>{user.timezone}</strong>
+            <small>Used for schedules, reminders and activity dates.</small>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -795,8 +1211,6 @@ function MemberManager() {
             <label>
               Role
               <select name="role">
-                <option>Adviser</option>
-                <option>Operations</option>
                 <option>Administrator</option>
               </select>
             </label>

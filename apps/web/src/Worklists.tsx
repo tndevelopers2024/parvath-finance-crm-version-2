@@ -1,17 +1,9 @@
-import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  CalendarDays,
-  Mail,
-  MessageCircle,
-  Phone,
-  ChevronRight,
-} from "lucide-react";
+import { CalendarDays, Mail, MessageCircle, Phone } from "lucide-react";
 import { date, query, rupees, time, useData } from "./api";
 import {
   Avatar,
   Badge,
-  Calendar,
   ContactActions,
   Empty,
   ErrorState,
@@ -22,10 +14,8 @@ import {
   Pagination,
   Panel,
   ProductIcon,
-  QuickActions,
   SearchInput,
   Tabs,
-  Tip,
 } from "./components";
 export default function Worklists({
   type,
@@ -33,8 +23,7 @@ export default function Worklists({
   type: "renewals" | "followups";
 }) {
   const renewal = type === "renewals",
-    [params, setParams] = useSearchParams(),
-    [selected, setSelected] = useState("");
+    [params, setParams] = useSearchParams();
   const stats = useData("/dashboard"),
     catalogue = useData("/catalogue");
   const range = params.get("range") || "All",
@@ -52,9 +41,7 @@ export default function Worklists({
     });
   const d = stats.data?.data || {},
     events = d.events || [],
-    followups = d.followups || [],
-    today = d.today || "2026-09-04",
-    day = selected || today;
+    today = d.today || "2026-09-04";
   const pending = events.filter((e: any) => e.status === "Pending");
   const rangeEvents = (days: number) =>
     pending.filter(
@@ -150,12 +137,6 @@ export default function Worklists({
         "Next Week",
         "Completed",
       ];
-  const dayTasks = followups.filter(
-    (f: any) =>
-      new Date(f.dueAt).toLocaleDateString("en-CA", {
-        timeZone: "Asia/Kolkata",
-      }) === day && f.state === "pending",
-  );
   return (
     <>
       <PageHeading
@@ -167,7 +148,7 @@ export default function Worklists({
         }
         actions={renewal ? <ExportButton module="renewals" /> : undefined}
       />
-      <div className={"worklist-layout " + (!renewal ? "followup-layout" : "")}>
+      <div className="worklist-layout worklist-full-width">
         <div>
           <Metrics items={cards} />
           <Panel className="worklist-table">
@@ -415,116 +396,6 @@ export default function Worklists({
             )}
           </Panel>
         </div>
-        <aside className="worklist-right">
-          <Panel>
-            <Calendar
-              markers={(renewal ? events : followups).map((r: any) => ({
-                date: renewal
-                  ? r.dueDate.slice(0, 10)
-                  : new Date(r.dueAt).toLocaleDateString("en-CA", {
-                      timeZone: "Asia/Kolkata",
-                    }),
-                tone:
-                  r.timing === "Overdue"
-                    ? "rose-dot"
-                    : r.timing === "Completed" || r.timing === "Renewed"
-                      ? "mint-dot"
-                      : "amber-dot",
-              }))}
-              selected={day}
-              onSelect={(v) => {
-                setSelected(v);
-                if (renewal)
-                  setParams((p) => {
-                    p.set("from", v);
-                    p.set("to", v);
-                    p.delete("range");
-                    p.delete("page");
-                    return p;
-                  });
-              }}
-              title={renewal ? "Renewals Calendar" : undefined}
-            />
-            <div className="calendar-legend">
-              <span>
-                <i className="rose-dot" /> {renewal ? "Due Today" : "Overdue"}
-              </span>
-              <span>
-                <i className="amber-dot" /> {renewal ? "Upcoming" : "Due Today"}
-              </span>
-              <span>
-                <i className="mint-dot" /> {renewal ? "Renewed" : "Completed"}
-              </span>
-            </div>
-          </Panel>
-          <Panel
-            title={
-              renewal
-                ? "Upcoming This Week"
-                : day === today
-                  ? "Today’s Schedule"
-                  : date(day) + " Schedule"
-            }
-            action={
-              <Link
-                className="text-link"
-                to={`/${type}?range=${renewal ? "Next+7+Days" : "Today"}`}
-              >
-                View All
-              </Link>
-            }
-          >
-            {(renewal ? rangeEvents(7) : dayTasks).slice(0, 5).map((r: any) => (
-              <Link key={r.id} to={`/${type}/${r.id}`} className="schedule-row">
-                {renewal ? (
-                  <span className="circle-icon amber">
-                    <CalendarDays size={22} />
-                  </span>
-                ) : (
-                  <time>{time(r.dueAt)}</time>
-                )}
-                {!renewal && <Avatar name={r.client.name} />}
-                <div>
-                  <strong>{r.client.name}</strong>
-                  <small>
-                    {renewal
-                      ? r.product.definition.provider.name
-                      : r.channel +
-                        " · " +
-                        (r.product?.definition.category || "General")}
-                  </small>
-                  {renewal && <small>{date(r.dueDate)}</small>}
-                </div>
-                {renewal && <span>{rupees(r.amountMinor)}</span>}
-                <ChevronRight size={15} />
-              </Link>
-            ))}
-            {!(renewal ? rangeEvents(7) : dayTasks).length && (
-              <Empty text="No scheduled items" />
-            )}
-          </Panel>
-          {!renewal && (
-            <Panel title="Quick Actions">
-              <QuickActions followup />
-            </Panel>
-          )}
-          <Tip title={renewal ? "Stay Proactive" : "Tip"}>
-            {renewal ? (
-              <>
-                <Link
-                  className="button small float-right"
-                  to="/renewals?range=Next+7+Days"
-                >
-                  Set Reminder
-                </Link>
-                Open a renewal to schedule a durable in-app reminder. WhatsApp
-                automation requires a configured provider.
-              </>
-            ) : (
-              "Regular follow-ups help you build stronger relationships and increase renewals."
-            )}
-          </Tip>
-        </aside>
       </div>
     </>
   );

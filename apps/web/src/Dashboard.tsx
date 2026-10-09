@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Sun,
-  Sunset,
-  Moon,
-  Lightbulb,
   Cake,
   CalendarDays,
   Phone,
   Target,
   FileText,
-  MessageCircle,
 } from "lucide-react";
-import { date, rupees, time, useData } from "./api";
+import { date, rupees, useData } from "./api";
 import {
   ArrowRight,
   Badge,
@@ -24,41 +19,12 @@ import {
   Metrics,
   Panel,
   Tabs,
-  useAuth,
 } from "./components";
-const QUOTES = [
-  "“Strong relationships\nbuild secure tomorrows.”",
-  "“An investment in knowledge\npays the best interest.”",
-  "“Consistency and patience\ncompound into prosperity.”",
-  "“Trust is the currency\nof enduring partnerships.”",
-  "“Financial peace begins\nwith clear planning.”",
-  "“Protecting families today\nfor a confident tomorrow.”",
-  "“Disciplined wealth management\nturns dreams into reality.”",
-];
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour >= 4 && hour < 12) {
-    return { text: "Good Morning", Icon: Sun };
-  }
-  if (hour >= 12 && hour < 17) {
-    return { text: "Good Afternoon", Icon: Sun };
-  }
-  if (hour >= 17 && hour < 22) {
-    return { text: "Good Evening", Icon: Sunset };
-  }
-  return { text: "Good Evening", Icon: Moon };
-}
-
 export default function Dashboard() {
   const { data, isPending, error, refetch } = useData("/dashboard");
   const [tab, setTab] = useState("All"),
     [selected, setSelected] = useState("");
-  const [quoteIndex, setQuoteIndex] = useState(
-    () => new Date().getDate() % QUOTES.length,
-  );
-  const user = useAuth();
-  if (isPending) return <Loading />;
+  if (isPending) return <Loading layout="dashboard" />;
   if (error) return <ErrorState error={error} retry={refetch} />;
   const d = data.data,
     day = selected || d.today;
@@ -120,43 +86,12 @@ export default function Dashboard() {
         tone: "lavender",
       })),
   ].filter((a) => (tab === "All" ? a.type !== "Leads" : a.type === tab));
-  const { text: greetingText, Icon: GreetingIcon } = getGreeting();
-  const dueTodayCount =
-    (d.followupsToday || 0) +
-    events.filter((e: any) => e.timing === "Due Today").length +
-    (d.birthdays?.length || 0);
 
   return (
     <div className="dashboard-layout">
       <div className="dashboard-main">
-        <section className="greeting">
-          <GreetingIcon size={56} />
-          <div>
-            <h1>
-              {greetingText}, {user?.name ? user.name.split(" ")[0] : "Advisor"}
-              !
-            </h1>
-            <p>
-              {dueTodayCount > 0
-                ? `Here’s what needs your attention today (${dueTodayCount} priority item${dueTodayCount === 1 ? "" : "s"}).`
-                : "Here’s what needs your attention today."}
-            </p>
-          </div>
-          <blockquote
-            onClick={() => setQuoteIndex((i) => (i + 1) % QUOTES.length)}
-            title="Click to cycle quote"
-            style={{ cursor: "pointer", userSelect: "none" }}
-          >
-            {QUOTES[quoteIndex].split("\n").map((line, idx) => (
-              <span key={idx}>
-                {line}
-                {idx === 0 && <br />}
-              </span>
-            ))}
-          </blockquote>
-          <img src="/assets/logo.png" alt="" />
-        </section>
         <Metrics
+          showIcons
           items={[
             {
               label: "Total Clients",
@@ -236,36 +171,53 @@ export default function Dashboard() {
             )}
           </Panel>
 
-          <div className="dashboard-activity-col">
-            <Panel
-              title="Recent Activity"
-              action={
-                <Link className="text-link" to="/reports">
-                  View All <ArrowRight size={14} />
-                </Link>
-              }
-            >
-              {d.activity.slice(0, 5).map((a: any, i: number) => (
-                <div className="activity-row" key={a.id}>
-                  <span
-                    className={`product-icon ${["mint", "blue", "lavender"][i % 3]}`}
-                  >
-                    <FileText size={18} />
-                  </span>
-                  <div>
-                    <strong>{a.summary}</strong>
-                    <small>{date(a.createdAt)}</small>
-                  </div>
-                  <time>{time(a.createdAt)}</time>
-                </div>
-              ))}
-            </Panel>
-          </div>
-
           <div className="dashboard-right-inline">
             <Panel className="dashboard-calendar">
-              <Calendar selected={day} onSelect={setSelected} />
-              <div className="day-summary">
+              <Calendar
+                selected={day}
+                onSelect={setSelected}
+                markers={[
+                  ...(d.events || []).filter((event: any) => event.status !== "Cancelled").map((event: any) => ({
+                    date: event.dueDate.slice(0, 10),
+                    tone:
+                      event.status === "Confirmed"
+                        ? "mint"
+                        : event.dueDate.slice(0, 10) < d.today
+                          ? "rose"
+                          : "amber",
+                  })),
+                  ...(d.followups || []).filter((task: any) => task.state !== "cancelled").map((task: any) => ({
+                    date: new Date(task.dueAt).toLocaleDateString("en-CA", {
+                      timeZone: "Asia/Kolkata",
+                    }),
+                    tone:
+                      task.state === "completed"
+                        ? "mint"
+                        : new Date(task.dueAt).toLocaleDateString("en-CA", {
+                              timeZone: "Asia/Kolkata",
+                            }) < d.today
+                          ? "rose"
+                          : "amber",
+                  })),
+                  ...(d.birthdayCalendar || []).map((birthday: any) => ({
+                    date: day.slice(0, 4) + "-" + birthday.monthDay,
+                    tone: "lavender",
+                  })),
+                ]}
+              />
+              <div className="calendar-legend">
+                <span>
+                  <i className="rose-dot" /> Overdue
+                </span>
+                <span>
+                  <i className="amber-dot" /> Scheduled
+                </span>
+                <span>
+                  <i className="mint-dot" /> Completed
+                </span>
+                <span><i className="birthday-dot" /> Birthday</span>
+              </div>
+              <div className="day-summary" aria-live="polite" aria-atomic="true">
                 <h3>
                   {day === d.today ? "Today, " : ""}
                   {date(day)}
@@ -282,7 +234,7 @@ export default function Dashboard() {
                   </b>{" "}
                   Renewals due
                 </Link>
-                <Link to="/followups">
+                <Link to={"/followups?from=" + day + "&to=" + day}>
                   <span className="product-icon blue">
                     <FileText size={17} />
                   </span>
@@ -298,7 +250,7 @@ export default function Dashboard() {
                   </b>{" "}
                   Follow-ups
                 </Link>
-                <Link to="/clients">
+                <Link to={"/calendar?date=" + day}>
                   <span className="product-icon mint">
                     <Cake size={17} />
                   </span>
@@ -309,25 +261,15 @@ export default function Dashboard() {
                   </b>{" "}
                   Birthdays
                 </Link>
-                <Link className="text-link align-end" to="/followups">
+                <Link
+                  className="text-link align-end"
+                  to={"/calendar?date=" + day}
+                >
                   View All <ArrowRight size={14} />
                 </Link>
               </div>
             </Panel>
           </div>
-        </div>
-        <div className="relationship-banner">
-          <Lightbulb size={40} />
-          <div>
-            <strong>Relationship Reminder</strong>
-            <p>
-              You haven’t contacted {d.staleClients} clients in the last 90
-              days. Keep the relationship warm!
-            </p>
-          </div>
-          <Link className="button" to="/clients">
-            View Clients <ArrowRight size={16} />
-          </Link>
         </div>
       </div>
     </div>

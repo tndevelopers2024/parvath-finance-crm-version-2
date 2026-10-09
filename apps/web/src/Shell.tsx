@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Link,
   NavLink,
@@ -28,15 +28,18 @@ import {
   PanelLeft,
 } from "lucide-react";
 import { api, useData } from "./api";
-import { Avatar, Botanical, useAuth } from "./components";
+import { Avatar, Loading, Modal, useAuth } from "./components";
+import { Notifications } from "./Supporting";
 import { useTheme } from "./theme";
 const nav = [
   ["Dashboard", "/dashboard", House],
-  ["Clients", "/clients", Users],
-  ["Leads", "/leads", Target],
+  ["Calendar", "/calendar", CalendarDays],
   ["Renewals", "/renewals", CalendarDays],
   ["Follow-ups", "/followups", CheckSquare],
+  ["Clients", "/clients", Users],
+  ["Leads", "/leads", Target],
   ["Products", "/products", Package],
+  ["Providers", "/providers", House],
   ["Engagement", "/engagement", MessageCircle],
   ["Reports", "/reports", ChartNoAxesColumnIncreasing],
   ["Settings", "/settings", Settings],
@@ -50,8 +53,9 @@ export default function Shell() {
     [search, setSearch] = useState(""),
     [searchOpen, setSearchOpen] = useState(false),
     [account, setAccount] = useState(false),
+    [notificationsOpen, setNotificationsOpen] = useState(false),
     [sidebarExpanded, setSidebarExpanded] = useState(false),
-    [pinned, setPinned] = useState(false);
+    [pinned, setPinned] = useState(true);
   const input = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -169,7 +173,7 @@ export default function Shell() {
       ? ["Add Follow-up", "/followups/new"]
       : ["Add Client", "/clients/new"];
   return (
-    <div className="app-shell">
+    <div className="app-shell workspace-redesign">
       {drawer && (
         <button
           className="drawer-backdrop"
@@ -181,7 +185,7 @@ export default function Shell() {
       <aside
         ref={sidebar}
         id="main-navigation"
-        className={`sidebar ${compact ? (drawer ? "open" : "") : (pinned || sidebarExpanded ? "sidebar--expanded" : "sidebar--mini")}`}
+        className={`sidebar ${compact ? (drawer ? "open" : "") : pinned || sidebarExpanded ? "sidebar--expanded" : "sidebar--mini"}`}
         inert={compact && !drawer ? true : undefined}
         role={compact && drawer ? "dialog" : undefined}
         aria-modal={compact && drawer ? true : undefined}
@@ -190,7 +194,7 @@ export default function Shell() {
         onMouseLeave={() => !compact && setSidebarExpanded(false)}
       >
         <Link className="brand" to="/dashboard">
-          <img src="/assets/logo.png" alt="" />
+          <img src="/assets/leaf-logo.png" alt="" />
           <span className="brand-text">
             <strong>Parvath FinServ</strong>
             <small>Your Financial Partner</small>
@@ -203,42 +207,57 @@ export default function Shell() {
         >
           <X />
         </button>
+        <div className="nav-section-label">DAILY WORK</div>
         <nav aria-label="Main navigation">
-          {nav.map(([label, to, C]) => (
-            <NavLink key={to} to={to}>
-              <C size={21} />
-              <span className="nav-label">{label}</span>
-
-            </NavLink>
+          {nav.map(([label, to, C], index) => (
+            <Fragment key={to}>
+              {index === 4 && (
+                <div className="nav-section-label">RELATIONSHIPS</div>
+              )}
+              {index === 9 && (
+                <div className="nav-section-label">MANAGEMENT</div>
+              )}
+              <NavLink key={to} to={to} title={label} aria-label={label}>
+                <C size={19} />
+                <span className="nav-label">{label}</span>
+              </NavLink>
+            </Fragment>
           ))}
         </nav>
-        <div className="sidebar-bottom">
-          <Botanical
-            text={
-              isLead
-                ? "Clients Today Secure Tomorrow"
-                : isFollow
-                  ? "Grow Protect Invest Together"
-                  : "Helping You Build a Secure Tomorrow"
-            }
-          />
-          <div className="sidebar-footer">
-            <strong>Parvath FinServ</strong>
-            <small>Your Trusted Financial Partner</small>
-          </div>
-        </div>
+        <Link className="sidebar-account" to="/settings">
+          <Avatar name={user.name} followCursor={false} />
+          <span>
+            <strong>{user.name}</strong>
+            <small>{user.role}</small>
+          </span>
+          <Settings size={16} />
+        </Link>
       </aside>
       <div className="workspace" inert={compact && drawer}>
         <header className="topbar">
           <button
             className="menu-toggle"
-            aria-label={compact ? "Open navigation" : (pinned ? "Unpin navigation" : "Pin navigation")}
+            aria-label={
+              compact
+                ? "Open navigation"
+                : pinned
+                  ? "Unpin navigation"
+                  : "Pin navigation"
+            }
             aria-expanded={compact ? drawer : pinned}
             aria-controls="main-navigation"
-            onClick={() => compact ? setDrawer(true) : setPinned(!pinned)}
+            onClick={() => (compact ? setDrawer(true) : setPinned(!pinned))}
           >
             {compact ? <Menu /> : <PanelLeft />}
           </button>
+          <div className="workspace-breadcrumb">
+            <span>Workspace</span>
+            <span aria-hidden="true">/</span>
+            <strong>
+              {nav.find(([, to]) => location.pathname.startsWith(to))?.[0] ||
+                "Notifications"}
+            </strong>
+          </div>
           <div className="top-actions">
             <div
               ref={searchContainerRef}
@@ -282,31 +301,29 @@ export default function Shell() {
                 aria-label="Search all records"
                 tabIndex={searchOpen ? 0 : -1}
               />
-              {searchOpen && search.length > 0 && (
+              {searchOpen && (
                 <button
                   type="button"
                   className="topbar-search-clear"
-                  aria-label="Clear search"
+                  aria-label="Close search"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSearch("");
-                    input.current?.focus();
+                    setSearchOpen(false);
+                    input.current?.blur();
                   }}
                 >
                   <X size={14} />
                 </button>
               )}
-              {searchOpen && search.length === 0 && (
-                <kbd className="topbar-search-shortcut" title="Press ESC to close">
-                  ESC
-                </kbd>
-              )}
               {searchOpen && debounced.length >= 2 && (
                 <div className="search-results">
                   {results.isPending ? (
-                    <p className="search-status">Searching…</p>
+                    <Loading />
                   ) : results.error ? (
-                    <p className="search-status search-error">{results.error.message}</p>
+                    <p className="search-status search-error">
+                      {results.error.message}
+                    </p>
                   ) : results.data?.data.length ? (
                     results.data.data.map((r: any) => (
                       <Link
@@ -330,15 +347,19 @@ export default function Shell() {
                 </div>
               )}
             </div>
-            {(user.role !== "Operations" || isFollow) && (
-              <Link className="button primary" to={primary[1]}>
-                <Plus size={19} />
-                <span>{primary[0]}</span>
-              </Link>
-            )}
-            <Link
+            {!isLead &&
+              !location.pathname.startsWith("/products") &&
+              (user.role !== "Operations" || isFollow) && (
+                <Link className="button primary" to={primary[1]}>
+                  <Plus size={19} />
+                  <span>{primary[0]}</span>
+                </Link>
+              )}
+            <button
+              type="button"
               className="notification-button"
-              to="/notifications"
+              onClick={() => setNotificationsOpen(true)}
+              aria-haspopup="dialog"
               aria-label="Notifications"
             >
               <Bell size={20} />
@@ -348,7 +369,7 @@ export default function Shell() {
                   {notifications.data.data.filter((n: any) => !n.readAt).length}
                 </b>
               )}
-            </Link>
+            </button>
             <div ref={accountRef} className="account">
               <button
                 onClick={() => setAccount(!account)}
@@ -397,6 +418,11 @@ export default function Shell() {
             </div>
           </div>
         </header>
+        {notificationsOpen && (
+          <Modal title="Notifications" className="notifications-popup" onClose={() => setNotificationsOpen(false)}>
+            <Notifications onClose={() => setNotificationsOpen(false)} />
+          </Modal>
+        )}
         <main className="page-content">
           <Outlet />
         </main>

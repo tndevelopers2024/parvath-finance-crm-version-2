@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   ArrowRight,
   CalendarDays,
@@ -42,11 +42,8 @@ import {
   CalendarPlus,
   type LucideIcon,
 } from "lucide-react";
-import { date, query, useData, useWrite } from "./api";
-import { Blobatar, useGaze } from "./blobatar";
-import "./blobatar/motion.css";
-import "./blobatar/gaze.css";
-import { useTheme } from "./theme";
+import { date, initials, query, useData, useWrite } from "./api";
+import Skeleton, { type SkeletonLayout } from "./Skeleton";
 
 export const icons: Record<string, LucideIcon> = {
   clients: Users,
@@ -78,15 +75,12 @@ export function Icon({
   const C = icons[name] || FileText;
   return <C size={size} {...props} />;
 }
-const BRAND_HUES = [155, 140, 45, 170, 55, 115];
 
 export function Avatar({
   name,
   size = "normal",
   photoId,
   photoUrl,
-  animate = "always",
-  followCursor = true,
 }: {
   name?: string;
   size?: string;
@@ -96,43 +90,21 @@ export function Avatar({
   followCursor?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === "dark";
   const cleanName = (name || "").trim() || "User";
   const nameHash = cleanName
     .split("")
     .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const brandHue = BRAND_HUES[nameHash % BRAND_HUES.length];
-
-  const { ref } = useGaze({
-    travel: size === "large" ? 5 : 3.5,
-    lookAt: followCursor ? "pointer" : undefined,
-  });
-
-  const imageSrc = photoUrl || (photoId ? `/api/documents/${photoId}/download` : undefined);
+  const imageSrc =
+    photoUrl || (photoId ? `/api/documents/${photoId}/download` : undefined);
 
   return (
-    <span
-      className={`avatar ${size} hue-${nameHash % 4}`}
-      title={cleanName}
-    >
+    <span className={`avatar ${size} hue-${nameHash % 4}`} title={cleanName}>
       {imageSrc && !failed ? (
-        <img
-          src={imageSrc}
-          alt={cleanName}
-          onError={() => setFailed(true)}
-        />
+        <img src={imageSrc} alt={cleanName} onError={() => setFailed(true)} />
       ) : (
-        <Blobatar
-          ref={ref as any}
-          name={cleanName}
-          animate={animate}
-          background={true}
-          hue={brandHue}
-          tone={isDark ? 0.95 : 0.15}
-          palette={isDark ? { bg: "#182b22" } : { bg: "#e9eee8" }}
-          className="avatar-blobatar"
-        />
+        <span className="avatar-initials" aria-hidden="true">
+          {initials(cleanName)}
+        </span>
       )}
     </span>
   );
@@ -207,7 +179,6 @@ export function Panel({
 }
 export function PageHeading({
   title,
-  subtitle,
   actions,
 }: {
   title: string;
@@ -218,7 +189,6 @@ export function PageHeading({
     <div className="page-heading">
       <div>
         <h1>{title}</h1>
-        <p>{subtitle}</p>
       </div>
       {actions && <div className="flex gap-3">{actions}</div>}
     </div>
@@ -226,7 +196,9 @@ export function PageHeading({
 }
 export function Metrics({
   items,
+  showIcons = true,
 }: {
+  showIcons?: boolean;
   items: {
     label: string;
     value: any;
@@ -245,16 +217,18 @@ export function Metrics({
       {items.map((m, i) => (
         <Link
           to={m.to || "#"}
-          className={`metric ${m.tone || ["mint", "rose", "lavender", "blue", "amber"][i % 5]}`}
+          className={`metric summary-card ${m.tone || ["mint", "rose", "lavender", "blue", "amber"][i % 5]}`}
           key={m.label}
           title={m.tooltip || m.note}
         >
-          <span className="metric-icon">
-            <Icon name={m.icon} size={29} />
-          </span>
-          <div>
-            <strong>{m.value ?? "—"}</strong>
-            <div>{m.label}</div>
+          {showIcons && <span className="summary-category-icon" aria-hidden="true"><Icon name={m.icon} size={18} /></span>}
+          <div className="metric-body">
+            <div className="metric-label">{m.label}</div>
+            <strong>
+              {typeof m.value === "number"
+                ? new Intl.NumberFormat("en-IN").format(m.value)
+                : (m.value ?? "—")}
+            </strong>
             {m.note && <small>{m.note}</small>}
           </div>
         </Link>
@@ -360,7 +334,6 @@ export function Pagination({
 export function ContactActions({
   client,
   detail,
-  compact = false,
 }: {
   client: any;
   detail?: string;
@@ -395,8 +368,13 @@ export function ContactActions({
           void open("WhatsApp");
         }}
       >
-        <MessageCircle size={17} />
-        {!compact && "WhatsApp"}
+        <img
+          src="/assets/whatsapp.svg"
+          width={18}
+          height={18}
+          alt=""
+          aria-hidden="true"
+        />
       </button>
       <button
         aria-label={`Call ${client.name}`}
@@ -407,7 +385,6 @@ export function ContactActions({
         }}
       >
         <Phone size={16} />
-        {!compact && "Call"}
       </button>
       {detail && (
         <Link
@@ -466,27 +443,22 @@ export function Calendar({
         ))}
         {Array.from({ length: days }, (_, i) => {
           const d = `${y}-${String(m + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+          const tones = [...new Set(markers.filter((marker) => marker.date === d).map((marker) => marker.tone))];
           return (
             <button
               key={d}
               className={d === selected ? "active" : ""}
               aria-label={
                 date(d) +
-                (markers.some((m) => m.date === d)
-                  ? " · scheduled activity"
+                (tones.length
+                  ? " · " + tones.map((tone) => ({ rose: "overdue", amber: "scheduled", mint: "completed", lavender: "birthday" })[tone] || "activity").join(", ")
                   : "")
               }
               aria-pressed={d === selected}
               onClick={() => onSelect(d)}
             >
               {i + 1}
-              {markers.some((m) => m.date === d) && (
-                <i
-                  className={
-                    "date-marker " + markers.find((m) => m.date === d)?.tone
-                  }
-                />
-              )}
+              {tones.length > 0 && <span className="date-markers" aria-hidden="true">{tones.map((tone) => <i key={tone} className={"date-marker " + tone} />)}</span>}
             </button>
           );
         })}
@@ -574,13 +546,8 @@ export function Botanical({
     </div>
   );
 }
-export function Loading() {
-  return (
-    <div className="loading" role="status">
-      <span className="spinner" />
-      Loading your workspace…
-    </div>
-  );
+export function Loading({ layout = "rows" }: { layout?: SkeletonLayout }) {
+  return <Skeleton layout={layout} />;
 }
 export function ErrorState({
   error,
@@ -616,10 +583,14 @@ export function Modal({
   title,
   children,
   onClose,
+  className = "",
+  headerActions,
 }: {
   title: string;
   children: ReactNode;
+  headerActions?: ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -628,9 +599,17 @@ export function Modal({
     return () => dialog?.close();
   }, []);
   return (
-    <dialog ref={ref} onCancel={onClose} className="modal">
+    <dialog
+      ref={ref}
+      onCancel={onClose}
+      aria-label={title}
+      className={`modal ${className}`}
+    >
       <div className="panel-heading">
         <h2>{title}</h2>
+        {headerActions && (
+          <div className="modal-header-actions">{headerActions}</div>
+        )}
         <button aria-label="Close dialog" onClick={onClose}>
           <X size={20} />
         </button>
@@ -671,12 +650,11 @@ export function Back({
   to?: string;
   children?: ReactNode;
 }) {
-  const navigate = useNavigate();
   return (
-    <button className="back-link" onClick={() => navigate(to)}>
+    <Link className="back-link" to={to}>
       <ChevronLeft size={16} />
       {children}
-    </button>
+    </Link>
   );
 }
 export function FormError({ error }: { error: any }) {
@@ -982,7 +960,7 @@ export function ClientCombobox({
           />
           <div className="client-combobox-input-actions">
             {clientsQuery.isPending && (
-              <span className="spinner" style={{ width: 14, height: 14 }} />
+              <Loading layout="inline" />
             )}
             {searchTerm && (
               <button
@@ -1037,7 +1015,7 @@ export function ClientCombobox({
           role="listbox"
           className="client-combobox-dropdown"
         >
-          {filteredClients.length > 0 ? (
+          {clientsQuery.isPending ? <Loading /> : filteredClients.length > 0 ? (
             <div className="client-combobox-options">
               {filteredClients.map((c, idx) => {
                 const isSelected = c.id === value;

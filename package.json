@@ -24,12 +24,14 @@
     "admin:create": "tsx apps/api/src/admin.ts",
     "worker": "tsx apps/api/src/worker.ts",
     "test:browser": "node scripts/browser-check.mjs",
+    "test:ui": "node scripts/workspace-ui-check.mjs",
     "demo:cleanup": "tsx scripts/cleanup-demo-checks.ts",
     "docs:api": "node --import tsx scripts/generate-openapi.ts",
     "format:check": "prettier --check apps packages scripts tests",
     "db:local": "node scripts/local-mongo.mjs",
     "db:import-postgres": "tsx scripts/import-postgres.ts",
-    "db:verify-cutover": "tsx scripts/verify-cutover.ts"
+    "db:verify-cutover": "tsx scripts/verify-cutover.ts",
+    "demo:refresh": "tsx scripts/refresh-demo-coverage.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1135.0",

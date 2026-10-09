@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, Plus } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
-import { date, rupees, time, toMinor, useData, useWrite } from "./api";
+import { date, query, rupees, time, toMinor, useData, useWrite } from "./api";
 import {
   Avatar,
   Back,
@@ -46,7 +46,10 @@ export function NewRecord({
   const members = useData("/members"),
     catalogue = useData("/catalogue");
   const [clientId, setClientId] = useState(params.get("clientId") || ""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [definitionId, setDefinitionId] = useState(
+      params.get("definitionId") || "",
+    );
   const linkedProducts = useData(
       "/products?clientId=" + clientId,
       !!clientId && type === "followups",
@@ -60,14 +63,19 @@ export function NewRecord({
       !!clientId && type === "followups",
     );
   const formReady =
-    !members.isPending &&
-    (type !== "products" || !catalogue.isPending);
+    !members.isPending && (type !== "products" || !catalogue.isPending);
+  const category = params.get("category") || "";
+  const productBack = category
+    ? "/products/category/" + encodeURIComponent(category)
+    : "/products";
   const title =
     type === "leads"
       ? "Add Lead"
       : type === "followups"
         ? "Add Follow-up"
-        : "Add Product";
+        : category
+          ? "Add client to " + category
+          : "Add client policy / account";
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     const f = formValues(e);
     if (!clientId) {
@@ -102,14 +110,18 @@ export function NewRecord({
         };
       const r = await write.mutateAsync({ path: "/" + type, body });
       toast(title.replace("Add", "") + " created");
-      navigate("/" + type + "/" + r.data.id);
+      navigate(
+        type === "products" && category
+          ? productBack
+          : "/" + type + "/" + r.data.id,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
   };
   return (
     <>
-      <Back to={"/" + type}>
+      <Back to={type === "products" ? productBack : "/" + type}>
         Back to {type === "followups" ? "Follow-ups" : type}
       </Back>
       <PageHeading
@@ -135,7 +147,17 @@ export function NewRecord({
                 }}
                 required
               />
-              <Link className="text-link" to="/clients/new">
+              <Link
+                className="text-link"
+                to={
+                  "/clients/new?" +
+                  query({
+                    productCategory: type === "products" ? category : undefined,
+                    definitionId:
+                      type === "products" ? definitionId : undefined,
+                  })
+                }
+              >
                 Create a new client
               </Link>
             </label>
@@ -259,14 +281,21 @@ export function NewRecord({
             ) : (
               <>
                 <label>
-                  Product Catalogue *
-                  <select required name="definitionId">
+                  Product option *
+                  <select
+                    required
+                    name="definitionId"
+                    value={definitionId}
+                    onChange={(e) => setDefinitionId(e.target.value)}
+                  >
                     <option value="">Select product</option>
-                    {catalogue.data?.data.map((d: any) => (
-                      <option key={d.id} value={d.id}>
-                        {d.provider.name} · {d.name} ({d.category})
-                      </option>
-                    ))}
+                    {catalogue.data?.data
+                      .filter((d: any) => !category || d.category === category)
+                      .map((d: any) => (
+                        <option key={d.id} value={d.id}>
+                          {d.provider.name} · {d.name} ({d.category})
+                        </option>
+                      ))}
                   </select>
                 </label>
                 <label>
@@ -307,8 +336,8 @@ export function NewRecord({
             {formReady ? (
               <Submit busy={write.isPending}>{title}</Submit>
             ) : (
-              <button className="primary" type="button" disabled>
-                Loading client…
+              <button className="primary" type="button" disabled aria-label="Loading form">
+                <Loading layout="inline" />
               </button>
             )}
           </div>
@@ -341,7 +370,7 @@ export function LeadDetail() {
     [reason, setReason] = useState(""),
     [accept, setAccept] = useState(false),
     [edit, setEdit] = useState(false);
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const l = q.data.data;
   return (
@@ -606,7 +635,7 @@ export function FollowupDetail() {
     write = useWrite(),
     toast = useToast();
   const [mode, setMode] = useState("");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const f = q.data.data;
   return (
@@ -823,7 +852,7 @@ export function RenewalDetail() {
     write = useWrite(),
     toast = useToast();
   const [mode, setMode] = useState("");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const e = q.data.data,
     paid = e.payments.reduce(
@@ -1035,12 +1064,16 @@ export function ProductDetail() {
     write = useWrite(),
     toast = useToast();
   const [mode, setMode] = useState("");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const p = q.data.data;
   return (
     <>
-      <Back to="/products">Back to Products</Back>
+      <Back
+        to={"/products/category/" + encodeURIComponent(p.definition.category)}
+      >
+        Back to {p.definition.category} clients
+      </Back>
       <PageHeading
         title={p.definition.category}
         subtitle={p.definition.provider.name + " · " + p.definition.name}

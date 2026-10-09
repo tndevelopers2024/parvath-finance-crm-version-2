@@ -31,7 +31,7 @@ export default function ClientSuccess() {
           </Link>
           <Link to={`/products/new?clientId=${id}`}>
             <PackagePlus size={23} />
-            Add Product
+            Add policy / account
           </Link>
           <Link to={`/followups/new?clientId=${id}`}>
             <CalendarDays size={23} />

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -10,14 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import {
-  Columns3,
-  Filter,
-  GripVertical,
-  List,
-  Phone,
-  Plus,
-} from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
 import { date, query, useData, useWrite } from "./api";
 import {
@@ -26,16 +18,11 @@ import {
   ErrorState,
   Loading,
   Metrics,
-  PageHeading,
-  Panel,
   ProductIcon,
-  SearchInput,
   useToast,
 } from "./components";
 export default function Leads() {
-  const [params, setParams] = useSearchParams(),
-    [view, setView] = useState("Kanban"),
-    [filters, setFilters] = useState(false),
+  const [params] = useSearchParams(),
     navigate = useNavigate(),
     toast = useToast(),
     write = useWrite();
@@ -79,40 +66,6 @@ export default function Leads() {
   };
   return (
     <>
-      <PageHeading
-        title="Leads"
-        subtitle="Track and manage your prospects from enquiry to conversion."
-        actions={
-          <>
-            <div className="segmented">
-              {[
-                ["Kanban", Columns3],
-                ["List", List],
-              ].map(([label, C]: any) => (
-                <button
-                  key={label}
-                  className={view === label ? "primary" : ""}
-                  onClick={() => setView(label)}
-                >
-                  <C size={16} />
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setFilters(!filters)}
-              aria-expanded={filters}
-            >
-              <Filter size={16} />
-              More Filters
-            </button>
-            <Link className="button primary" to="/leads/new">
-              <Plus size={16} />
-              Add Lead
-            </Link>
-          </>
-        }
-      />
       <Metrics
         items={[
           {
@@ -148,41 +101,11 @@ export default function Leads() {
           },
         ]}
       />
-      {filters && (
-        <div className="filters panel">
-          <SearchInput
-            value={params.get("q") || ""}
-            onChange={(v) =>
-              setParams((p) => {
-                p.set("q", v);
-                return p;
-              })
-            }
-            placeholder="Search leads by name or requirement..."
-          />
-          <select
-            aria-label="Lead priority"
-            value={params.get("priority") || ""}
-            onChange={(e) =>
-              setParams((p) => {
-                p.set("priority", e.target.value);
-                return p;
-              })
-            }
-          >
-            <option value="">All priorities</option>
-            <option>Normal</option>
-            <option>High</option>
-            <option>Urgent</option>
-          </select>
-          <button onClick={() => setParams({})}>Reset</button>
-        </div>
-      )}
       {q.isPending ? (
-        <Loading />
+        <Loading layout="board" />
       ) : q.error ? (
         <ErrorState error={q.error} />
-      ) : view === "Kanban" ? (
+      ) : (
         <DndContext sensors={sensors} onDragEnd={move}>
           <div className="lead-board">
             {stages.map((s, i) => (
@@ -195,44 +118,6 @@ export default function Leads() {
             ))}
           </div>
         </DndContext>
-      ) : (
-        <Panel>
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Requirement</th>
-                  <th>Stage</th>
-                  <th>Priority</th>
-                  <th>Next action</th>
-                  <th>Next follow-up</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((l: any) => (
-                  <tr key={l.id}>
-                    <td>
-                      <Link className="person-cell" to={"/leads/" + l.id}>
-                        <Avatar name={l.client.name} />
-                        <strong>{l.client.name}</strong>
-                      </Link>
-                    </td>
-                    <td>{l.requirement}</td>
-                    <td>
-                      <Badge>{l.stage}</Badge>
-                    </td>
-                    <td>
-                      <Badge>{l.priority}</Badge>
-                    </td>
-                    <td>{l.nextAction}</td>
-                    <td>{date(l.nextFollowUp)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
       )}
     </>
   );
@@ -271,16 +156,6 @@ function LeadColumn({
           }
         </p>
       </header>
-      <Link
-        className="button add-lead"
-        to={
-          "/leads/new?stage=" +
-          encodeURIComponent(index < 4 ? stage : "New Enquiries")
-        }
-      >
-        <Plus size={16} />
-        Add {index === 0 ? "New " : ""}Lead
-      </Link>
       <div className="lead-column-cards">
         {rows.map((l) => (
           <LeadCard key={l.id} lead={l} />
@@ -306,18 +181,16 @@ function LeadCard({ lead: l }: { lead: any }) {
           : undefined
       }
     >
-      <Avatar name={l.client.name} />
       <div className="lead-card-body">
-        <Link to={"/leads/" + l.id}>
-          <strong>{l.client.name}</strong>
-        </Link>
-        <small>
-          <Phone size={10} />
-          {l.client.phone}
-        </small>
+        <div className="lead-card-profile min-w-0">
+          <Avatar name={l.client.name} />
+          <Link to={"/leads/" + l.id} className="min-w-0" title={l.client.name}>
+            <strong>{l.client.name}</strong>
+          </Link>
+        </div>
         <p>
           <ProductIcon category={l.requirement} size={13} />
-          {l.requirement}
+          <span>{l.requirement}</span>
         </p>
         <div className="lead-tags">
           <Badge

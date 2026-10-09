@@ -1,0 +1,137 @@
+/* Soft green palette shared by both appearance modes. */
+:root,
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-page: #eef5ef;
+  --color-surface-soft: #e5f0e7;
+  --color-brand: #286446;
+  --color-brand-hover: #205338;
+  --color-chart: #39825a;
+  --color-heading: #193c2a;
+  --color-ink: #304c3b;
+  --color-muted: #5b7463;
+  --color-subtle: #647b6b;
+  --color-border: #ccdfd0;
+  --color-brand-soft: #d9ecde;
+  --color-accent: #8bc9a0;
+  --color-accent-ink: #214f33;
+  --color-accent-soft: #d9ecde;
+  --color-focus: #39825a;
+}
+html.dark,
+html.dark body,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-page: #151717;
+  --color-surface-soft: #292d2b;
+  --color-brand: #a3d8b3;
+  --color-brand-hover: #b9e6c6;
+  --color-chart: #a3d8b3;
+  --color-heading: #f0f3f1;
+  --color-ink: #d9dfdb;
+  --color-muted: #a9b3ad;
+  --color-subtle: #a9b3ad;
+  --color-border: #3b423e;
+  --color-brand-soft: #2d3b32;
+  --color-accent: #a3d8b3;
+  --color-accent-ink: #152e1f;
+  --color-accent-soft: #2d3b32;
+  --color-focus: #a3d8b3;
+  background: var(--color-page);
+  color: var(--color-ink);
+}
+.app-shell.workspace-redesign,
+html.dark .app-shell.workspace-redesign {
+  --ws-canvas: var(--color-page);
+  --ws-line: var(--color-border);
+  --ws-heading: var(--color-heading);
+  --ws-text: var(--color-ink);
+  --ws-muted: var(--color-muted);
+  --ws-green: #286446;
+  --ws-selected: #d9ecde;
+  --ws-surface: #f8fcf8;
+  --ws-soft: #e5f0e7;
+  --ws-gold: #39825a;
+  --color-border: #ccdfd0;
+  --color-heading: #193c2a;
+  --color-ink: #304c3b;
+  --color-muted: #5b7463;
+}
+html.dark .app-shell.workspace-redesign {
+  --ws-surface: #202422;
+  --ws-soft: #292d2b;
+  --ws-green: #a3d8b3;
+  --ws-selected: #2d3b32;
+  --ws-gold: #a3d8b3;
+  --color-border: #3b423e;
+  --color-heading: #f0f3f1;
+  --color-ink: #d9dfdb;
+  --color-muted: #a9b3ad;
+}
+.app-shell.workspace-redesign .button.primary,
+.app-shell.workspace-redesign button.primary,
+html.dark .app-shell.workspace-redesign .button.primary,
+html.dark .app-shell.workspace-redesign button.primary,
+.app-shell.workspace-redesign .calendar-grid button.active,
+html.dark .app-shell.workspace-redesign .calendar-grid button.active {
+  background: #a3d8b3;
+  border-color: #a3d8b3;
+  color: #173d25;
+}
+.app-shell.workspace-redesign .button.primary:hover,
+.app-shell.workspace-redesign button.primary:hover,
+html.dark .app-shell.workspace-redesign .button.primary:hover,
+html.dark .app-shell.workspace-redesign button.primary:hover {
+  background: #b9e6c6;
+  border-color: #b9e6c6;
+}
+.app-shell.workspace-redesign .sidebar nav a.active,
+html.dark .app-shell.workspace-redesign .sidebar nav a.active,
+.app-shell.workspace-redesign .dashboard-main .metric:first-child {
+  background: #32684b;
+  border-color: #32684b;
+  color: #f0faf3;
+}
+html.dark .app-shell.workspace-redesign .dashboard-main .metric:first-child {
+  background: #293e32;
+  border-color: #405a48;
+}
+.app-shell.workspace-redesign .page-content .dashboard-main > .metrics > .summary-card:first-child .summary-category-icon {
+  color: #c6ebcf;
+}
+html.dark .modal {
+  background: #202422;
+  border-color: #3b423e;
+  color: #d9dfdb;
+}
+html:not(.dark) .modal {
+  background: #f8fcf8;
+}
+html.dark .notification-row.unread {
+  background: #2d3b32;
+}
+html.dark .text-link,
+html.dark button.text-link {
+  color: #a3d8b3;
+}
+html.dark .text-link:hover,
+html.dark button.text-link:hover {
+  color: #c6ebcf;
+}
+html .auth-redesign {
+  background-color: var(--color-page);
+  color: var(--color-ink);
+}
+html .auth-redesign .auth-card form > .auth-submit {
+  background: #a3d8b3;
+  border-color: #a3d8b3;
+  color: #173d25;
+}
+html .auth-redesign .auth-card form > .auth-submit:hover {
+  background: #b9e6c6;
+}
+
+html.dark .app-shell.workspace-redesign .sidebar nav a.active {
+  background: #304a3a;
+  color: #e5f0e8;
+}

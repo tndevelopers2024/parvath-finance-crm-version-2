@@ -43,14 +43,18 @@ export default function ClientProfile() {
     toast = useToast(),
     q = useData("/clients/" + id),
     write = useWrite();
-  const [tab, setTab] = useState("Overview"),
+  const [tab, setTab] = useState(
+      new URLSearchParams(loc.search).get("tab") === "products"
+        ? "Products"
+        : "Overview",
+    ),
     [note, setNote] = useState(""),
     [relationship, setRelationship] = useState(false),
     [health, setHealth] = useState(false),
     [showDelete, setShowDelete] = useState(false);
   const canDelete = user.role === "Administrator" || user.role === "Adviser";
   const file = useRef<HTMLInputElement>(null);
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const c = q.data.data;
   const onboarding = c.onboardingProfile || {};
@@ -127,7 +131,7 @@ export default function ClientProfile() {
           to={`/products/new?clientId=${id}`}
         >
           <Plus size={14} />
-          Add Product
+          Add policy / account
         </Link>
       }
     >
@@ -242,7 +246,7 @@ export default function ClientProfile() {
             "Communication",
             "Notes",
           ]}
-          value={tab}
+          value={tab === "Products" ? `Products (${c.products.length})` : tab}
           onChange={setTab}
         />
       </Panel>
@@ -771,7 +775,10 @@ function RelationshipModal({
           </select>
         </label>
         <FormError error={write.error} />
-        <button className="primary" disabled={!targetClientId || write.isPending}>
+        <button
+          className="primary"
+          disabled={!targetClientId || write.isPending}
+        >
           {write.isPending ? "Linking…" : "Link contact"}
         </button>
       </form>

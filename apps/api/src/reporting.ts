@@ -125,7 +125,12 @@ reporting.get("/dashboard", async (req, res) => {
         .map(flattenClient),
       birthdayCalendar: clients
         .filter((c) => c.contact.dob)
-        .map((c) => ({ monthDay: c.contact.dob!.toISOString().slice(5, 10) })),
+        .map((c) => ({
+          id: c.id,
+          name: c.contact.name,
+          phone: c.contact.phone,
+          monthDay: c.contact.dob!.toISOString().slice(5, 10),
+        })),
       staleClients: clients.filter(
         (c) =>
           !c.communications[0] ||

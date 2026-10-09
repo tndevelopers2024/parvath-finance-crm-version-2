@@ -356,9 +356,27 @@ describe("Authenticated MongoDB workflows", () => {
     ).toBe(1);
   });
   it("creates a catalogue item and a lead with stage history", async () => {
+    const addedProvider = await write("/providers", { name: "Test Insurer" });
+    expect(addedProvider.status).toBe(201);
+    expect(
+      (await admin.get("/api/providers")).body.data.map((item: any) => item.id),
+    ).toContain(addedProvider.body.data.id);
+    expect((await foreign.get("/api/providers")).body.data).toEqual([]);
+    expect((await write("/providers", { name: "Test Insurer" })).status).toBe(
+      409,
+    );
+    const foreignLink = await foreign
+      .post("/api/catalogue")
+      .set("X-CSRF-Token", foreignToken)
+      .send({
+        name: "Foreign plan",
+        category: "Life Insurance",
+        providerId: addedProvider.body.data.id,
+      });
+    expect(foreignLink.status).toBe(404);
     const cat = await write("/catalogue", {
       name: "Term Protect",
-      provider: "Test Insurer",
+      providerId: addedProvider.body.data.id,
       category: "Life Insurance",
     });
     expect(cat.status).toBe(201);
@@ -407,6 +425,52 @@ describe("Authenticated MongoDB workflows", () => {
       await db.clientProduct.count({ where: { opportunityId: lead.id } }),
     ).toBe(1);
     expect(product.status).toBe("Application");
+  });
+  it("filters and paginates the product register across matching records", async () => {
+    const result = await admin.get("/api/products").query({
+      q: "Term Protect",
+      status: "Application",
+      category: "Life Insurance",
+      limit: 1,
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.data.map((p: any) => p.id)).toContain(product.id);
+    expect(result.body.meta.total).toBe(1);
+    const option = await admin
+      .get("/api/products")
+      .query({ definitionId: product.definitionId });
+    expect(option.body.data.map((p: any) => p.id)).toContain(product.id);
+    const summary = await admin.get("/api/products/summary");
+    expect(summary.status).toBe(200);
+    expect(summary.body.products).toContainEqual({
+      definitionId: product.definitionId,
+      clients: 1,
+      records: 1,
+      active: 0,
+      applications: 1,
+      closed: 0,
+    });
+    expect(summary.body.data).toContainEqual({
+      category: "Life Insurance",
+      clients: 1,
+      records: 1,
+      active: 0,
+    });
+    expect((await foreign.get("/api/products/summary")).body.data).toEqual([]);
+    const closed = await admin
+      .get("/api/products")
+      .query({ status: "Closed", q: "TEST-" + prefix });
+    expect(closed.body.meta.total).toBe(0);
+    const second = await admin
+      .get("/api/products")
+      .query({ q: "TEST-" + prefix, limit: 1, page: 2 });
+    expect(second.body.data).toHaveLength(0);
+    expect(second.body.meta.total).toBe(1);
+    const isolated = await foreign
+      .get("/api/products")
+      .query({ q: "Term Protect", category: "Life Insurance" });
+    expect(isolated.body.meta.total).toBe(0);
+    expect((await admin.get("/api/products?status=Unknown")).status).toBe(422);
   });
   it("creates typed events and keeps payment distinct from confirmation", async () => {
     const r = await write("/renewals", {
