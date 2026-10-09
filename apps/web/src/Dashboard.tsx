@@ -30,6 +30,35 @@ export default function Dashboard() {
     day = selected || d.today;
   const events = d.events.filter((e: any) => e.status === "Pending"),
     tasks = d.followups.filter((f: any) => f.state === "pending");
+  const calendarMarkers = [
+                  ...(d.events || []).filter((event: any) => event.status !== "Cancelled").map((event: any) => ({
+                    date: event.dueDate.slice(0, 10),
+                    tone:
+                      event.status === "Confirmed"
+                        ? "mint"
+                        : event.dueDate.slice(0, 10) < d.today
+                          ? "rose"
+                          : "amber",
+                  })),
+                  ...(d.followups || []).filter((task: any) => task.state !== "cancelled").map((task: any) => ({
+                    date: new Date(task.dueAt).toLocaleDateString("en-CA", {
+                      timeZone: "Asia/Kolkata",
+                    }),
+                    tone:
+                      task.state === "completed"
+                        ? "mint"
+                        : new Date(task.dueAt).toLocaleDateString("en-CA", {
+                              timeZone: "Asia/Kolkata",
+                            }) < d.today
+                          ? "rose"
+                          : "amber",
+                  })),
+                  ...(d.birthdayCalendar || []).map((birthday: any) => ({
+                    date: day.slice(0, 4) + "-" + birthday.monthDay,
+                    tone: "lavender",
+                  })),
+                ];
+  const statusCount = (tone: string) => calendarMarkers.filter((marker) => marker.date === day && marker.tone === tone).length;
   const attention = [
     ...events.slice(0, 2).map((e: any) => ({
       type: "Renewals",
@@ -176,46 +205,19 @@ export default function Dashboard() {
               <Calendar
                 selected={day}
                 onSelect={setSelected}
-                markers={[
-                  ...(d.events || []).filter((event: any) => event.status !== "Cancelled").map((event: any) => ({
-                    date: event.dueDate.slice(0, 10),
-                    tone:
-                      event.status === "Confirmed"
-                        ? "mint"
-                        : event.dueDate.slice(0, 10) < d.today
-                          ? "rose"
-                          : "amber",
-                  })),
-                  ...(d.followups || []).filter((task: any) => task.state !== "cancelled").map((task: any) => ({
-                    date: new Date(task.dueAt).toLocaleDateString("en-CA", {
-                      timeZone: "Asia/Kolkata",
-                    }),
-                    tone:
-                      task.state === "completed"
-                        ? "mint"
-                        : new Date(task.dueAt).toLocaleDateString("en-CA", {
-                              timeZone: "Asia/Kolkata",
-                            }) < d.today
-                          ? "rose"
-                          : "amber",
-                  })),
-                  ...(d.birthdayCalendar || []).map((birthday: any) => ({
-                    date: day.slice(0, 4) + "-" + birthday.monthDay,
-                    tone: "lavender",
-                  })),
-                ]}
+                markers={calendarMarkers}
               />
-              <div className="calendar-legend">
+              <div className="calendar-legend" aria-label="Activity counts for selected date" aria-live="polite">
                 <span>
-                  <i className="rose-dot" /> Overdue
+                  <i className="rose-dot" /> Overdue <b>{statusCount("rose")}</b>
                 </span>
                 <span>
-                  <i className="amber-dot" /> Scheduled
+                  <i className="amber-dot" /> Scheduled <b>{statusCount("amber")}</b>
                 </span>
                 <span>
-                  <i className="mint-dot" /> Completed
+                  <i className="mint-dot" /> Completed <b>{statusCount("mint")}</b>
                 </span>
-                <span><i className="birthday-dot" /> Birthday</span>
+                <span><i className="birthday-dot" /> Birthday <b>{statusCount("lavender")}</b></span>
               </div>
               <div className="day-summary" aria-live="polite" aria-atomic="true">
                 <h3>
@@ -261,13 +263,13 @@ export default function Dashboard() {
                   </b>{" "}
                   Birthdays
                 </Link>
+              </div>
                 <Link
-                  className="text-link align-end"
+                  className="text-link calendar-view-all"
                   to={"/calendar?date=" + day}
                 >
                   View All <ArrowRight size={14} />
                 </Link>
-              </div>
             </Panel>
           </div>
         </div>

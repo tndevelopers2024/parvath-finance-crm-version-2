@@ -3330,6 +3330,28 @@ input[type="reset"],
   gap: 10px 16px;
   margin-top: 18px;
 }
+.app-shell.workspace-redesign .dashboard-calendar {
+  display: flex;
+  flex-direction: column;
+}
+.app-shell.workspace-redesign .dashboard-calendar .calendar-legend span {
+  gap: 6px;
+}
+.app-shell.workspace-redesign .dashboard-calendar .calendar-legend b {
+  margin-left: auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ws-heading);
+}
+.app-shell.workspace-redesign .dashboard-calendar .calendar-view-all {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px !important;
+}
 .app-shell.workspace-redesign .dashboard-calendar .day-summary {
   margin-top: 18px;
   padding-top: 16px;
