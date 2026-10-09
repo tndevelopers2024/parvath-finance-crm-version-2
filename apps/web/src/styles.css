@@ -5194,12 +5194,12 @@ html.dark .auth-theme-bottom .theme-toggle:hover { background: transparent; bord
 /* Balance the login panels on larger screens. */
 @media (min-width: 701px) {
   .auth-redesign { padding: 40px; }
-  .auth-frame { max-width: 1120px; min-height: 660px; grid-template-columns: 1fr 1fr; border-radius: 36px; padding: 8px; }
-  .auth-story { min-height: 644px; border-radius: 28px; padding: 34px; }
+  .auth-frame { max-width: 1120px; min-height: 780px; grid-template-columns: 1fr 1fr; border-radius: 36px; padding: 8px; }
+  .auth-story { min-height: 764px; border-radius: 28px; padding: 34px; }
   .auth-form-panel { padding: 56px; }
   .auth-redesign .auth-card { max-width: 370px; }
   .auth-redesign .auth-card h1 { font-size: 42px; margin-top: 0; margin-bottom: 18px; }
-  .auth-redesign .auth-card > p { margin-bottom: 32px; max-width: 330px; }
+  .auth-redesign .auth-card > p { margin-bottom: 32px; max-width: none; font-size: 14px; }
   .auth-logo img { width: 128px; height: 96px; }
   .auth-logo strong { font-size: 22px; }
   .auth-logo small { font-size: 12px; }
@@ -5213,6 +5213,9 @@ html.dark .auth-redesign .auth-card form > .auth-submit:hover { background: #efd
   .auth-form-panel { padding: 32px; }
 }
 /* Taller full-width image panel on mobile. */
+@media (min-width: 1000px) {
+  .auth-redesign .auth-card > p { white-space: normal; font-size: 14px; }
+}
 @media (max-width: 700px) {
   .auth-story { min-height: 300px; }
 }
