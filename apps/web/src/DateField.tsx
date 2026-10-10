@@ -8,6 +8,7 @@ import {
   type Ref,
 } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { todayIST } from "./api";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
@@ -105,7 +106,7 @@ export default function DateField({
   const [text, setText] = useState(display(initial.slice(0, 10)));
   const [left, setLeft] = useState(false);
   const [open, setOpen] = useState(false);
-  const today = isoOf(new Date());
+  const today = todayIST();
   const within = (v: string) => (!min || v >= min) && (!max || v <= max);
   const start = () => day || (within(today) ? today : max || min || today);
   const [view, setView] = useState(() => start().slice(0, 7));

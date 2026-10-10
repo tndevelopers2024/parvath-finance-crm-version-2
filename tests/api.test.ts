@@ -16,6 +16,7 @@ import { migrateDatabase } from "../apps/api/src/persistence/migrate.js";
 import { runJob } from "../apps/api/src/worker.js";
 import { config } from "../apps/api/src/config.js";
 import { s3 } from "../apps/api/src/documents.js";
+import { integrations } from "../apps/api/src/integrations.js";
 const password = "Test-" + randomUUID(),
   prefix = randomUUID();
 let org: string,
@@ -1950,6 +1951,326 @@ describe("Authenticated MongoDB workflows", () => {
     const after = (await admin.get("/api/clients/" + client.id)).body.data;
     expect(after.lastContactAt).toBe(prior.lastContactAt);
     expect(after.health.score).toBe(prior.health.score);
+  });
+  it("enforces onboarding validation on the server for every client write", async () => {
+    const base = { name: "Rules Example", kind: "Individual" };
+    let n = 0;
+    const post = (extra: any) =>
+      write("/clients", {
+        ...base,
+        phone: `+9190000${String(70000 + ++n)}`,
+        ...extra,
+      });
+    for (const [label, extra] of [
+      ["future birth date", { dob: "2999-01-01" }],
+      ["impossible birth date", { dob: "2023-02-31" }],
+      ["bad phone", { phone: "12345" }],
+      ["bad email", { email: "abc" }],
+      ["negative dependents", { onboardingProfile: { dependents: "-2" } }],
+      ["fractional dependents", { onboardingProfile: { dependents: "1.5" } }],
+      ["bad PIN code", { onboardingProfile: { pinCode: "ABC" } }],
+      ["PIN starting with 0", { onboardingProfile: { pinCode: "012345" } }],
+      ["negative savings", { onboardingProfile: { monthlySavings: "-500" } }],
+      ["text savings", { onboardingProfile: { totalSavings: "abc" } }],
+      [
+        "future spouse birth date",
+        { onboardingProfile: { spouseDob: "2999-01-01" } },
+      ],
+      [
+        "future child birth date",
+        { onboardingProfile: { children: [{ dob: "2999-01-01" }] } },
+      ],
+      [
+        "impossible child birth date",
+        { onboardingProfile: { children: [{ dob: "2024-02-30" }] } },
+      ],
+      [
+        "future client-since date",
+        { onboardingProfile: { clientSince: "2999-01-01" } },
+      ],
+      [
+        "incomplete follow-up",
+        { onboardingProfile: { initialFollowup: { enabled: true } } },
+      ],
+    ] as [string, any][]) {
+      const r = await post(extra);
+      expect(r.status, `${label}: ${r.text}`).toBe(422);
+    }
+    expect(
+      await db.contact.count({
+        where: { organizationId: org, name: "Rules Example" },
+      }),
+    ).toBe(0);
+    // Blank optional fields and common ways of writing amounts and PIN codes remain valid.
+    const ok = await post({
+      dob: "1990-02-28",
+      onboardingProfile: {
+        dependents: "",
+        pinCode: "600 001",
+        monthlySavings: "₹ 25,000",
+        totalSavings: "3,00,000.50",
+        spouseDob: "",
+        clientSince: "",
+        children: [{ name: "Child", dob: "" }],
+      },
+    });
+    expect(ok.status, ok.text).toBe(201);
+  });
+  it("keeps saved onboarding details untouched and validates only what an edit changes", async () => {
+    const created = await write("/clients", {
+      name: "Legacy Details",
+      phone: "+919000077001",
+      kind: "Individual",
+    });
+    expect(created.status, created.text).toBe(201);
+    const id = created.body.data.id;
+    // Free text saved before the format rules existed.
+    const legacy = {
+      dependents: "two",
+      pinCode: "n/a",
+      monthlySavings: "about 5k",
+      maritalStatus: "Married",
+    };
+    await db.client.update({
+      where: { id },
+      data: { onboardingJson: JSON.stringify(legacy) },
+    });
+    const current = (await admin.get(`/api/clients/${id}`)).body.data;
+    const edited = await write(
+      `/clients/${id}`,
+      {
+        name: "Legacy Details Renamed",
+        phone: current.phone,
+        kind: "Individual",
+        version: current.version,
+        onboardingProfile: { ...legacy, companyName: "Example Co" },
+      },
+      "patch",
+    );
+    expect(edited.status, edited.text).toBe(200);
+    expect(edited.body.data.onboardingProfile).toMatchObject({
+      ...legacy,
+      companyName: "Example Co",
+    });
+    const changed = await write(
+      `/clients/${id}`,
+      {
+        name: "Legacy Details Renamed",
+        phone: current.phone,
+        kind: "Individual",
+        version: edited.body.data.version,
+        onboardingProfile: { ...legacy, dependents: "three" },
+      },
+      "patch",
+    );
+    expect(changed.status, changed.text).toBe(422);
+    const stored = (await admin.get(`/api/clients/${id}`)).body.data;
+    expect(stored.onboardingProfile.dependents).toBe("two");
+  });
+  it("pages each lead stage separately with totals for the whole matching set", async () => {
+    const holder = await write("/clients", {
+      name: "Board Paging Client",
+      phone: "+919000077002",
+      kind: "Individual",
+    });
+    expect(holder.status, holder.text).toBe(201);
+    const owner0 = await admin.get("/api/leads?stage=New%20Enquiries&limit=1");
+    expect(owner0.status, owner0.text).toBe(200);
+    const before = owner0.body.meta.total;
+    const made: string[] = [];
+    const versions: Record<string, number> = {};
+    for (const [i, priority] of [
+      "Normal",
+      "High",
+      "Normal",
+      "Normal",
+      "Urgent",
+    ].entries()) {
+      const r = await write("/leads", {
+        clientId: holder.body.data.id,
+        ownerId: owner,
+        requirement: `Board paging ${i}`,
+        nextAction: "Call back",
+        priority,
+      });
+      expect(r.status, r.text).toBe(201);
+      made.push(r.body.data.id);
+      versions[r.body.data.id] = r.body.data.version;
+    }
+    const first = await admin.get(
+      "/api/leads?stage=New%20Enquiries&limit=2&page=1",
+    );
+    expect(first.body.meta.total).toBe(before + 5);
+    // (The tests run on a fixed clock, so leads made together tie on time; order is by id then.)
+    const seen: string[] = [];
+    for (let page = 1; ; page++) {
+      const r = await admin.get(
+        `/api/leads?stage=New%20Enquiries&limit=2&page=${page}`,
+      );
+      expect(r.status).toBe(200);
+      if (!r.body.data.length) break;
+      for (const row of r.body.data) {
+        expect(row.stage).toBe("New Enquiries");
+        seen.push(row.id);
+      }
+      expect(r.body.meta.total).toBe(before + 5);
+    }
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen).toHaveLength(before + 5);
+    expect(made.every((id) => seen.includes(id))).toBe(true);
+    // Filters narrow the total as well as the rows.
+    const high = await admin.get(
+      "/api/leads?stage=New%20Enquiries&priority=High&limit=100",
+    );
+    expect(high.body.data.every((r: any) => r.priority === "High")).toBe(true);
+    expect(high.body.meta.total).toBe(high.body.data.length);
+    expect(
+      (
+        await admin.get(
+          "/api/leads?stage=New%20Enquiries&q=Board%20paging&limit=1",
+        )
+      ).body.meta.total,
+    ).toBe(5);
+    // Moving one lead changes both stage totals.
+    const moved = await write(`/leads/${made[0]}/stage`, {
+      stage: "Contacted",
+      version: versions[made[0]],
+    });
+    expect(moved.status, moved.text).toBe(200);
+    expect(
+      (await admin.get("/api/leads?stage=New%20Enquiries&limit=1")).body.meta
+        .total,
+    ).toBe(before + 4);
+    expect(
+      (await admin.get("/api/leads?stage=Contacted&q=Board%20paging&limit=1"))
+        .body.meta.total,
+    ).toBe(1);
+  });
+  it("says plainly which integrations are not set up and refuses to fake them", async () => {
+    const saved = {
+      S3_BUCKET: config.S3_BUCKET,
+      S3_ENDPOINT: config.S3_ENDPOINT,
+      S3_ACCESS_KEY: config.S3_ACCESS_KEY,
+      S3_SECRET_KEY: config.S3_SECRET_KEY,
+      CLAMAV_HOST: config.CLAMAV_HOST,
+      SMTP_URL: config.SMTP_URL,
+      WHATSAPP_PHONE_NUMBER_ID: config.WHATSAPP_PHONE_NUMBER_ID,
+      WHATSAPP_ACCESS_TOKEN: config.WHATSAPP_ACCESS_TOKEN,
+    };
+    Object.assign(config, {
+      S3_BUCKET: "private-bucket",
+      S3_ENDPOINT: "http://localhost:9000",
+      S3_ACCESS_KEY: "",
+      S3_SECRET_KEY: "",
+      CLAMAV_HOST: "",
+      SMTP_URL: "",
+      WHATSAPP_PHONE_NUMBER_ID: "",
+      WHATSAPP_ACCESS_TOKEN: "",
+    });
+    const made = await write("/clients", {
+      name: "Integration Example",
+      phone: "+919000077003",
+      kind: "Individual",
+    });
+    expect(made.status, made.text).toBe(201);
+    const target = made.body.data;
+    const send = vi.spyOn(s3, "send");
+    try {
+      const me = await admin.get("/api/auth/me");
+      const found = me.body.data.integrations;
+      expect(found.documents.available).toBe(false);
+      expect(found.documents.missing).toEqual([
+        "S3_ACCESS_KEY",
+        "S3_SECRET_KEY",
+        "CLAMAV_HOST",
+      ]);
+      expect(found.email).toMatchObject({
+        available: false,
+        missing: ["SMTP_URL"],
+      });
+      expect(found.whatsapp.missing).toEqual([
+        "WHATSAPP_PHONE_NUMBER_ID",
+        "WHATSAPP_ACCESS_TOKEN",
+      ]);
+      // Staff who are not administrators are told to ask, not shown setting names.
+      const staff = integrations(false);
+      expect(staff.documents.missing).toEqual([]);
+      expect(staff.documents.message).toMatch(/administrator/i);
+      const documentsBefore = await db.document.count({
+        where: { clientId: target.id },
+      });
+      const upload = await admin
+        .post(`/api/clients/${target.id}/documents`)
+        .set("X-CSRF-Token", token)
+        .attach("file", Buffer.from("%PDF-1.4 test"), "synthetic.pdf");
+      expect(upload.status, upload.text).toBe(503);
+      expect(upload.body.error.message).toContain("CLAMAV_HOST");
+      expect(await db.document.count({ where: { clientId: target.id } })).toBe(
+        documentsBefore,
+      );
+      expect(send).not.toHaveBeenCalled();
+      expect(
+        (
+          await write("/whatsapp/broadcasts", {
+            clientIds: [target.id],
+            template: "renewal_reminder",
+            language: "en_US",
+            message: "Hello",
+          })
+        ).status,
+      ).toBe(503);
+      const reset = await write("/auth/forgot-password", {
+        email: `admin-${prefix}@example.test`,
+      });
+      expect(reset.status, reset.text).toBe(503);
+      expect(reset.body.error.message).toMatch(/not configured/i);
+    } finally {
+      send.mockRestore();
+      Object.assign(config, saved);
+    }
+  });
+  it("lists Active and Closed products when no status filter is given", async () => {
+    const holder = await write("/clients", {
+      name: "Register Listing Client",
+      phone: "+919000077004",
+      kind: "Individual",
+    });
+    expect(holder.status, holder.text).toBe(201);
+    const insurer = await write("/providers", {
+      name: "Register Listing Insurer " + prefix,
+    });
+    const plan = await write("/catalogue", {
+      name: "Register Listing Plan",
+      providerId: insurer.body.data.id,
+      category: "Health Insurance",
+    });
+    const made = await write("/products", {
+      clientId: holder.body.data.id,
+      definitionId: plan.body.data.id,
+      identifier: "LISTING-" + prefix.slice(0, 8),
+      status: "Active",
+      startDate: "2026-01-01",
+    });
+    expect(made.status, made.text).toBe(201);
+    const q = "LISTING-" + prefix.slice(0, 8);
+    const unfiltered = await admin.get("/api/products").query({ q });
+    expect(unfiltered.body.meta.total).toBe(1);
+    expect(unfiltered.body.data[0].status).toBe("Active");
+    expect(
+      (await admin.get("/api/products").query({ q, status: "Active" })).body
+        .meta.total,
+    ).toBe(1);
+    expect(
+      (await admin.get("/api/products").query({ q, status: "Application" }))
+        .body.meta.total,
+    ).toBe(0);
+    expect(
+      (
+        await admin
+          .get("/api/products")
+          .query({ q, category: "Health Insurance" })
+      ).body.meta.total,
+    ).toBe(1);
   });
   it("exports safely and signs out", async () => {
     const r = await admin.get("/api/reports/export?module=clients");

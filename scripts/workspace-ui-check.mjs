@@ -15,7 +15,10 @@ try {
     if (req.method() !== "GET")
       throw Error("Visual review must not write data");
     await route.fulfill({
-      json: response(new URL(req.url()).pathname.replace("/api", "")),
+      json: response(
+        new URL(req.url()).pathname.replace("/api", ""),
+        new URL(req.url()).searchParams,
+      ),
     });
   });
   await page.goto(target + "/providers");
@@ -87,6 +90,32 @@ try {
   console.log(
     "PASS Calendar month navigation, birthdays, details and responsive layouts",
   );
+  // Every route the responsive pass visits; the printed count comes from this list.
+  const screenRoutes = [
+    "/dashboard",
+    "/clients",
+    "/clients/client-0",
+    "/clients/new",
+    "/clients/import",
+    "/leads",
+    "/renewals",
+    "/followups",
+    "/products",
+    "/products/category/Life%20Insurance",
+    "/products/records",
+    "/products/new",
+    "/leads/new",
+    "/followups/new",
+    "/leads/lead-0",
+    "/renewals/event-0",
+    "/followups/followup-0",
+    "/products/product-0",
+    "/engagement",
+    "/engagement/new",
+    "/reports",
+    "/settings",
+    "/notifications",
+  ];
   for (const [width, height] of process.env.UI_INTERACTIONS_ONLY
     ? []
     : [
@@ -102,31 +131,7 @@ try {
         (theme) => localStorage.setItem("theme", theme),
         theme,
       );
-      for (const path of [
-        "/dashboard",
-        "/clients",
-        "/clients/client-0",
-        "/clients/new",
-        "/clients/import",
-        "/leads",
-        "/renewals",
-        "/followups",
-        "/products",
-        "/products/category/Life%20Insurance",
-        "/products/records",
-        "/products/new",
-        "/leads/new",
-        "/followups/new",
-        "/leads/lead-0",
-        "/renewals/event-0",
-        "/followups/followup-0",
-        "/products/product-0",
-        "/engagement",
-        "/engagement/new",
-        "/reports",
-        "/settings",
-        "/notifications",
-      ]) {
+      for (const path of screenRoutes) {
         await page.goto(target + path);
         await page.waitForLoadState("networkidle");
         await page.waitForTimeout(200);
@@ -169,7 +174,9 @@ try {
           fullPage: true,
         });
       }
-      console.log(width + "px " + theme + ": 21 screens fit");
+      console.log(
+        width + "px " + theme + ": " + screenRoutes.length + " screens fit",
+      );
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -202,6 +209,38 @@ try {
   await page.locator(".filter-details").waitFor();
   await page.goto(target + "/leads");
   await page.locator(".lead-board").waitFor();
+  // Each stage pages by itself: the count is the stage's full total, cards arrive 25 at a time,
+  // and every card can be reached. Qualified stays hidden on purpose.
+  const newColumn = page.getByRole("region", { name: "New Enquiries" });
+  await newColumn.getByLabel("32 leads in New Enquiries").waitFor();
+  // The column starts with one page of 25; scrolling may already have asked for more.
+  const firstPage = await newColumn.locator(".lead-card").count();
+  if (firstPage < 25 || firstPage > 32)
+    throw Error("New Enquiries should show 25 to 32 cards, got " + firstPage);
+  if (firstPage < 32)
+    await newColumn.getByRole("button", { name: /^Show more/ }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelectorAll(
+        'section[aria-label="New Enquiries"] .lead-card',
+      ).length === 32,
+  );
+  if (await page.getByRole("region", { name: "Qualified" }).count())
+    throw Error("The Qualified column should stay hidden");
+  await page.getByRole("button", { name: "Collapse Contacted" }).click();
+  await page.getByRole("button", { name: "Expand Contacted" }).click();
+  await page.goto(target + "/leads?priority=High");
+  await page
+    .getByRole("region", { name: "Contacted" })
+    .getByLabel("1 leads in Contacted")
+    .waitFor();
+  await page
+    .getByRole("region", { name: "New Enquiries" })
+    .getByLabel("0 leads in New Enquiries")
+    .waitFor();
+  console.log(
+    "PASS lead board paging, stage totals, filter and hidden Qualified",
+  );
   await page.goto(target + "/clients/new");
   await page.getByRole("button", { name: "Next: Additional Details" }).click();
   await page.locator(".field-error").first().waitFor();

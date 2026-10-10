@@ -1,19 +1,30 @@
 import { db } from "../apps/api/src/db.js";
 import { config } from "../apps/api/src/config.js";
-if (
-  config.NODE_ENV === "production" ||
-  config.DEMO_DATE !== "2026-09-04T06:30:00.000Z"
-)
+// Only records the journeys name themselves ("Journey Client 1234567", @example.test) are matched, but the
+// database must still be named on the command line so this cannot run against the wrong one by accident.
+if (config.NODE_ENV === "production")
+  throw new Error("Verification cleanup is not allowed in production");
+if (!process.argv.includes(`--confirm-db=${config.MONGODB_DB}`))
   throw new Error(
-    "Verification cleanup is only allowed in the fixed synthetic demo",
+    `This removes browser-journey records from database "${config.MONGODB_DB}". Re-run with --confirm-db=${config.MONGODB_DB}`,
   );
-const candidates = await db.client.findMany({
-  where: { contact: { name: { startsWith: "Journey " } } },
-  include: { contact: true },
-});
+// The journeys name their clients "Journey Client 1234567"; the full-app sweep names its own "Sweep Client 07",
+// "Sweep Business 2" and "Sweep Disposable <number>". Anything else is left alone.
+const journeyName =
+  /^(Journey (Client|Business|Import) \d{7}|Sweep (Client \d{2}|Business \d|Disposable \d+))$/;
+const candidates = [
+  ...(await db.client.findMany({
+    where: { contact: { name: { startsWith: "Journey " } } },
+    include: { contact: true },
+  })),
+  ...(await db.client.findMany({
+    where: { contact: { name: { startsWith: "Sweep " } } },
+    include: { contact: true },
+  })),
+];
 const records = candidates.filter(
   (c) =>
-    /^Journey (Client|Business|Import) \d{7}$/.test(c.contact.name) &&
+    journeyName.test(c.contact.name) &&
     (!c.contact.email || c.contact.email.endsWith("@example.test")),
 );
 const ids = records.map((c) => c.id),
@@ -80,7 +91,41 @@ if (ids.length)
       }
     }
   });
+// The role journeys add an Adviser and an Operations member (adviser.1234567@example.test and so on).
+const journeyUsers = (
+  await db.user.findMany({ where: { email: { endsWith: "@example.test" } } })
+).filter((u) => /^(adviser|operations)\.\d{7}@example\.test$/.test(u.email));
+for (const u of journeyUsers) {
+  await db.membership.deleteMany({ where: { userId: u.id } });
+  await db.user.delete({ where: { id: u.id } });
+}
+// The conversion journey adds its own insurer and plan; remove them once nothing references them.
+const insurers = [
+  ...(await db.provider.findMany({
+    where: { name: { startsWith: "Journey Insurer " } },
+  })),
+  ...(await db.provider.findMany({
+    where: { name: { startsWith: "Sweep " } },
+  })),
+].filter((p) =>
+  /^(Journey Insurer \d{7}|Sweep (Insurer|Bank|Extra Provider|Renamed Provider))$/.test(
+    p.name,
+  ),
+);
+let removedInsurers = 0;
+for (const insurer of insurers) {
+  const plans = await db.productDefinition.findMany({
+    where: { providerId: insurer.id },
+  });
+  const inUse = await db.clientProduct.count({
+    where: { definitionId: { in: plans.map((p) => p.id) } },
+  });
+  if (inUse) continue;
+  await db.productDefinition.deleteMany({ where: { providerId: insurer.id } });
+  await db.provider.delete({ where: { id: insurer.id } });
+  removedInsurers++;
+}
 console.log(
-  `Removed ${records.length} explicitly named browser-verification clients and their generated records.`,
+  `Removed ${records.length} explicitly named browser-verification clients and their generated records, ${removedInsurers} journey insurers and ${journeyUsers.length} journey members.`,
 );
 await db.close();

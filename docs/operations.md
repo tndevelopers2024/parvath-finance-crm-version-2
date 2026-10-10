@@ -44,7 +44,19 @@ The optional `pg` devDependency is used only by staging cutover/reconciliation s
 
 Run at least one worker, either as its own process (`node dist/apps/api/src/worker.js`) or inside the API process with `INLINE_WORKER=1`. On Railway the repository config runs `persistence/migrate.js` before each deploy, checks `/api/ready`, and defaults `INLINE_WORKER` to 1 because only the API service is started; set `INLINE_WORKER=0` there if you add a dedicated worker service. Document scans still need `CLAMAV_HOST`; without it every upload stays quarantined. MongoDB atomically claims jobs; a five-minute server-time lease and token fence stale workers. Retries use exponential delay and fail after five attempts. Administrator Settings displays failures and allows retry. Notification IDs equal job IDs to prevent duplication after a crash. Event confirmation cancels obsolete reminders.
 
-With a fixed demo clock, future business reminders do not become due until DEMO_DATE advances or is removed. Session expiry and job lease time use real time. Session TTL deletion is eventual; the store still rejects an expired session immediately. Password changes/reset revoke the affected stored sessions. Do not manually delete session indexes.
+Normal development and production use the real clock; the business day is Asia/Kolkata. With the optional fixed demo clock (`DEMO_DATE`, demo data only), future business reminders do not become due until DEMO_DATE advances or is removed. Session expiry and job lease time use real time. Session TTL deletion is eventual; the store still rejects an expired session immediately. Password changes/reset revoke the affected stored sessions. Do not manually delete session indexes.
+
+### Integrations: what each needs before it is live
+
+The app reports an unconfigured service instead of pretending: `GET /api/auth/me` returns `integrations.{documents,email,whatsapp}` with `available`, a plain `message` and, for administrators, the names of the missing settings. Uploads, broadcasts and password-reset mail are refused with that message until the settings exist. Nothing is simulated.
+
+| Capability | Settings required | How to verify live |
+| --- | --- | --- |
+| Document upload, scan and download | `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` (and `S3_ENDPOINT` for MinIO/R2; with plain AWS S3 the host's IAM role may replace the keys), `CLAMAV_HOST` (+ `CLAMAV_PORT`, default 3310) reachable by the worker | Upload a PDF to a client: it shows *Quarantined*, then *Available* after the scan job. Upload the EICAR test file: it must end *Rejected*. Download the clean file. |
+| Account-recovery email | `SMTP_URL` (for example `smtps://user:pass@smtp.example.com:465`), `MAIL_FROM`, an HTTPS `APP_ORIGIN` that the reset link will use | Request a reset for a real mailbox you control; the link must arrive and work once. |
+| WhatsApp broadcasts | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN` (Meta Cloud API), an approved template name and language, a client with phone and WhatsApp consent | Send one message to your own consented test number and check the recorded provider message id. |
+
+Restart the API and worker after changing these. Do not paste secrets into source files, issue trackers or chat.
 
 S3 files stay private. Detected signatures, allowed extensions and a 10 MB limit are enforced before quarantine. ClamAV INSTREAM must be privately reachable. Validate clean-file release and EICAR rejection in a nonproduction environment. Cross-workspace downloads return 404; quarantined/rejected files cannot be downloaded. Reconcile orphan objects after process-level failures.
 

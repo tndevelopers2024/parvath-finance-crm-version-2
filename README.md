@@ -51,7 +51,7 @@ npm run db:local
 
 This starts only a loopback-bound development replica set at port **27027**, with data in the ignored `.local-mongodb/` directory. Set `MONGODB_URI=mongodb://127.0.0.1:27027/?replicaSet=parvathLocal` and a separate `MONGODB_DB`. Do not expose the unauthenticated local service externally. Docker Compose offers an alternative `local-db` profile; see the Atlas guide for container/host connection URLs.
 
-The demo clock is `2026-09-04T06:30:00.000Z` (4 September 2026, noon in India). Production starts empty and uses real time.
+The app uses the real clock, with the business day in Asia/Kolkata. Only the synthetic demo data needs a frozen clock: set `DEMO_DATE=2026-09-04T06:30:00.000Z` (4 September 2026, noon in India) explicitly to run it, and leave it unset otherwise. Production rejects `DEMO_DATE`.
 
 ## Verification
 
@@ -63,8 +63,10 @@ npm run typecheck
 npm test
 npm run build
 npx playwright install chromium
-npm run test:browser -- journeys
-npm run demo:cleanup
+npm run test:ui
+npm run test:browser -- journeys   # writes synthetic records; see docs/browser-journeys.md
+npm run test:sweep                 # every page, with seeded data; see docs/browser-sweep.md
+npm run demo:cleanup -- --confirm-db=<MONGODB_DB>
 npm run test:browser -- visuals
 npm audit --omit=dev
 ```

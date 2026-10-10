@@ -18,9 +18,10 @@ import {
 import {
   clientSchema,
   onboardingProfileSchema,
+  withoutUnchanged,
   type ClientInput,
 } from "../../../packages/contracts/src/index";
-import { api, query, useData, useWrite } from "./api";
+import { api, query, todayIST, useData, useWrite } from "./api";
 import Clients from "./Clients";
 import { ProductClients } from "./Supporting";
 import {
@@ -134,6 +135,12 @@ export default function ClientForm({
       communicationChannels: ["WhatsApp"],
     });
   const bodyRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Details already saved for this client are kept as they are; only values changed here are held to the current rules.
+  const [savedProfile, setSavedProfile] = useState<
+    Record<string, unknown> | undefined
+  >();
+  const [showProfileErrors, setShowProfileErrors] = useState(false);
   const [stepNotice, setStepNotice] = useState("");
   const [otherIssues, setOtherIssues] = useState<string[]>([]),
     [checkFollowup, setCheckFollowup] = useState(false);
@@ -206,6 +213,7 @@ export default function ClientForm({
         registrationNumber: c.business?.registrationNumber || "",
         industry: c.business?.industry || "",
       });
+      setSavedProfile(c.onboardingProfile || undefined);
       setProfile(c.onboardingProfile || { sameAddress: true });
     } else if (!id) {
       try {
@@ -255,7 +263,27 @@ export default function ClientForm({
   }, [watch, draftKey, id, profile]);
   const issuesNotice =
     "Some details need correcting before this can be saved. See the list above the buttons.";
+  const profileIssues = () =>
+    onboardingProfileSchema.safeParse(
+      withoutUnchanged(cleanProfile(profile), savedProfile),
+    ).error?.issues || [];
+  // Per-field messages for the open step, keyed like "dependents" or "children.0.dob"; they clear as values are fixed.
+  const profileErrors: Record<string, string> = {};
+  if (showProfileErrors)
+    for (const issue of profileIssues())
+      profileErrors[issue.path.join(".")] ??= issue.message;
+  const checkDateInputs = () => {
+    const invalid = Array.from(
+      formRef.current?.querySelectorAll<HTMLInputElement>("input") || [],
+    ).find((input) => input.validity.customError);
+    if (!invalid) return true;
+    setStepNotice(invalid.validationMessage);
+    invalid.focus();
+    invalid.reportValidity();
+    return false;
+  };
   const save = async (values: ClientInput) => {
+    if (!checkDateInputs()) return;
     if (
       !id &&
       embedded &&
@@ -271,8 +299,11 @@ export default function ClientForm({
     }
     // The onboarding profile lives outside react-hook-form, so check it against the server's schema here.
     const sent = cleanProfile(profile);
-    const checked = onboardingProfileSchema.safeParse(sent);
+    const checked = onboardingProfileSchema.safeParse(
+      withoutUnchanged(sent, savedProfile),
+    );
     if (!checked.success) {
+      setShowProfileErrors(true);
       const followup = checked.error.issues.filter(
         (issue) => issue.path[0] === "initialFollowup",
       );
@@ -362,6 +393,24 @@ export default function ClientForm({
   const submit = handleSubmit(save, () => setStepNotice(issuesNotice));
   // The server requires only a name and a phone number (clientSchema); everything else on this step is checked for format when filled in.
   const validateSection = async () => {
+    if (!checkDateInputs()) return false;
+    // Every detail section is checked before moving on; the follow-up is checked on the review screen.
+    if (step >= 1 && step <= 3) {
+      const found = profileIssues().filter(
+        (issue) => issue.path[0] !== "initialFollowup",
+      );
+      if (found.length) {
+        setShowProfileErrors(true);
+        setStepNotice(
+          `Check the highlighted details to continue: ${[
+            ...new Set(found.map((issue) => describeField(issue.path))),
+          ]
+            .slice(0, 4)
+            .join(", ")}.`,
+        );
+        return false;
+      }
+    }
     if (step === 0) {
       const values = form.getValues();
       const required: [keyof ClientInput, string][] = [
@@ -506,6 +555,7 @@ export default function ClientForm({
               setDuplicateReason("");
               setReasonMissing(false);
               setOtherIssues([]);
+              setShowProfileErrors(false);
               setCheckFollowup(false);
               setRecovered(false);
               localStorage.removeItem(draftKey);
@@ -544,7 +594,7 @@ export default function ClientForm({
           {stepNotice}
         </p>
       )}
-      <form onSubmit={submit} noValidate>
+      <form ref={formRef} onSubmit={submit} noValidate>
         {embedded && sectionTitles.length > 1 && (
           <label className="popup-section-selector">
             Section {sectionIndex + 1} of {sectionTitles.length}
@@ -638,9 +688,7 @@ export default function ClientForm({
                                 onChange={dob.onChange}
                                 onBlur={dob.onBlur}
                                 inputRef={dob.ref}
-                                max={new Date(Date.now() + 19800000)
-                                  .toISOString()
-                                  .slice(0, 10)}
+                                max={todayIST()}
                                 error={errors.dob?.message}
                               />
                             )}
@@ -746,18 +794,21 @@ export default function ClientForm({
                 <AdditionalDetails
                   profile={profile}
                   setProfile={setProfile}
+                  errors={profileErrors}
                   form={form}
                 />
               ) : step === 2 ? (
                 <FinancialProfile
                   profile={profile}
                   setProfile={setProfile}
+                  errors={profileErrors}
                   form={form}
                 />
               ) : step === 3 ? (
                 <Preferences
                   profile={profile}
                   setProfile={setProfile}
+                  errors={profileErrors}
                   form={form}
                 />
               ) : (

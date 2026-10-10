@@ -12,12 +12,10 @@ import {
 } from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
-import { date, query, useData, useWrite } from "./api";
+import { date, query, useData, useInfiniteData, useWrite } from "./api";
 import {
   Avatar,
   Badge,
-  ErrorState,
-  Loading,
   Metrics,
   ProductIcon,
   useAuth,
@@ -29,21 +27,17 @@ export default function Leads() {
     navigate = useNavigate(),
     toast = useToast(),
     write = useWrite();
-  const q = useData(
-      "/leads?" +
-        query({
-          q: params.get("q"),
-          priority: params.get("priority"),
-          limit: 100,
-        }),
-    ),
+  // Each stage loads its own pages, so a column's count is the stage's full total and every lead is reachable.
+  const filters = {
+      q: params.get("q"),
+      priority: params.get("priority"),
+    },
     stats = useData("/dashboard");
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
   );
-  const d = stats.data?.data || {},
-    rows = q.data?.data || [];
+  const d = stats.data?.data || {};
   const boardRef = useRef<HTMLDivElement>(null);
   // A plain mouse wheel moves the board sideways, so scrolling works anywhere over it.
   // A column whose cards can still scroll keeps the wheel, and the page scrolls once the
@@ -74,13 +68,13 @@ export default function Leads() {
     };
     board.addEventListener("wheel", onWheel, { passive: false });
     return () => board.removeEventListener("wheel", onWheel);
-  }, [q.isPending]);
+  }, []);
   // One stage at a time: a column is about 300px wide plus its gap.
   const scrollBoard = (direction: number) =>
     boardRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
   const move = async (e: DragEndEvent) => {
     if (!e.over) return;
-    const lead = rows.find((r: any) => r.id === e.active.id),
+    const lead = e.active.data.current?.lead,
       stage = String(e.over.id);
     if (!lead || lead.stage === stage) return;
     if (
@@ -143,11 +137,7 @@ export default function Leads() {
           <Plus size={18} /> Add Lead
         </Link>
       )}
-      {q.isPending ? (
-        <Loading layout="board" />
-      ) : q.error ? (
-        <ErrorState error={q.error} />
-      ) : (
+      {
         <DndContext sensors={sensors} onDragEnd={move}>
           <div className="lead-board-nav">
             <span>
@@ -171,30 +161,46 @@ export default function Leads() {
             </div>
           </div>
           <div className="lead-board" ref={boardRef}>
-            {stages.map((s, i) => s === "Qualified" ? null : (
-              <LeadColumn
-                key={s}
-                stage={s}
-                index={i}
-                rows={rows.filter((r: any) => r.stage === s)}
-              />
-            ))}
+            {stages.map((s, i) =>
+              s === "Qualified" ? null : (
+                <LeadColumn key={s} stage={s} index={i} filters={filters} />
+              ),
+            )}
           </div>
         </DndContext>
-      )}
+      }
     </>
   );
 }
+const pageSize = 25;
 function LeadColumn({
   stage,
   index,
-  rows,
+  filters,
 }: {
   stage: string;
   index: number;
-  rows: any[];
+  filters: Record<string, string | null>;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const leads = useInfiniteData(
+    "/leads?" + query({ ...filters, stage }),
+    pageSize,
+  );
+  const rows: any[] = leads.data?.data || [];
+  const total: number = leads.data?.meta?.total ?? 0;
+  const more = useRef<HTMLButtonElement>(null);
+  // Next page loads as the end of the column scrolls into view; the button does the same by hand.
+  useEffect(() => {
+    const el = more.current;
+    if (!el || collapsed || !leads.hasMore || leads.loadingMore) return;
+    const watcher = new IntersectionObserver(
+      (hits) => hits.some((h) => h.isIntersecting) && leads.loadMore(),
+      { rootMargin: "120px" },
+    );
+    watcher.observe(el);
+    return () => watcher.disconnect();
+  }, [collapsed, leads.hasMore, leads.loadingMore, rows.length]);
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <section
@@ -214,7 +220,9 @@ function LeadColumn({
         </button>
         <h2>
           {stage}
-          <b>{rows.length}</b>
+          <b aria-label={`${total} leads in ${stage}`}>
+            {leads.isPending ? "…" : total}
+          </b>
         </h2>
         <p>
           {
@@ -233,14 +241,42 @@ function LeadColumn({
         {rows.map((l) => (
           <LeadCard key={l.id} lead={l} />
         ))}
-        {!rows.length && <p className="empty-column">No opportunities</p>}
+        {leads.isPending && <p className="empty-column">Loading leads…</p>}
+        {leads.error && !rows.length && (
+          <p className="empty-column" role="alert">
+            {leads.error.message}{" "}
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => void leads.refetch()}
+            >
+              Retry
+            </button>
+          </p>
+        )}
+        {!leads.isPending && !leads.error && !rows.length && (
+          <p className="empty-column">No opportunities</p>
+        )}
+        {leads.hasMore && (
+          <button
+            ref={more}
+            type="button"
+            className="lead-load-more"
+            disabled={leads.loadingMore}
+            onClick={leads.loadMore}
+          >
+            {leads.loadingMore
+              ? "Loading…"
+              : `Show more (${rows.length} of ${total})`}
+          </button>
+        )}
       </div>
     </section>
   );
 }
 function LeadCard({ lead: l }: { lead: any }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: l.id });
+    useDraggable({ id: l.id, data: { lead: l } });
   return (
     <article
       ref={setNodeRef}

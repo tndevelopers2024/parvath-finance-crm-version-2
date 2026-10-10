@@ -125,8 +125,18 @@ workflows.patch("/members/:id", permit("admin"), async (req, res) => {
     );
   await db.transaction(async (tx) => {
     if (v.role !== undefined && v.role !== m.role) {
-      await tx.membership.update({ where: { id: m.id }, data: { role: v.role } });
-      await audit(tx, req, "role", "Membership", m.id, "Workspace role updated");
+      await tx.membership.update({
+        where: { id: m.id },
+        data: { role: v.role },
+      });
+      await audit(
+        tx,
+        req,
+        "role",
+        "Membership",
+        m.id,
+        "Workspace role updated",
+      );
     }
     if (v.active !== undefined) {
       await tx.user.update({
@@ -144,7 +154,9 @@ workflows.patch("/members/:id", permit("admin"), async (req, res) => {
         v.active ? "reactivate" : "deactivate",
         "Membership",
         m.id,
-        v.active ? "Workspace member reactivated" : "Workspace member deactivated",
+        v.active
+          ? "Workspace member reactivated"
+          : "Workspace member deactivated",
       );
     }
     // Two administrators acting on each other at once must not leave the workspace without one.
@@ -384,7 +396,8 @@ workflows.get("/leads", async (req, res) => {
         history: { orderBy: { createdAt: "desc" } },
         product: true,
       },
-      orderBy: { createdAt: "desc" },
+      // The id breaks ties so leads created in the same instant never repeat or vanish between pages.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: p.limit,
       skip: (p.page - 1) * p.limit,
     }),
@@ -687,7 +700,9 @@ workflows.get("/products", async (req, res) => {
   const p = safePage(req.query);
   const filters = z
     .object({
-      status: productSchema.shape.status.optional(),
+      // Not productSchema.shape.status: it defaults to "Application", which would hide every Active and
+      // Closed product whenever no status filter is given.
+      status: z.enum(["Application", "Active", "Closed"]).optional(),
       category: z.string().trim().min(1).max(100).optional(),
       definitionId: z.uuid().optional(),
     })

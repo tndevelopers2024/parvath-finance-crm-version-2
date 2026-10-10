@@ -20,7 +20,7 @@ FinancialEvent distinguishes insurance renewal, premium payment, loan instalment
 
 ## Clock and reporting
 
-Default business timezone: Asia/Kolkata. Date-only events use UTC-midnight BSON dates; activities and tasks use timestamped UTC instants. SQL DATE values in the optional importer are parsed explicitly as UTC midnight. `domain.ts` contains shared clock/date/timing logic. Demo clock is 2026-09-04T06:30Z. Production rejects a configured demo clock and non-HTTPS APP_ORIGIN.
+Default business timezone: Asia/Kolkata. Date-only events use UTC-midnight BSON dates; activities and tasks use timestamped UTC instants. SQL DATE values in the optional importer are parsed explicitly as UTC midnight. `domain.ts` contains shared clock/date/timing logic. The real clock is used unless the optional demo clock `DEMO_DATE` is set (the synthetic demo data uses 2026-09-04T06:30Z). Production rejects a configured demo clock and non-HTTPS APP_ORIGIN.
 
 Today means a local calendar day. Pending follow-ups become overdue at their due instant, so overdue tasks today also appear under Today. 7-day and 30-day ranges include today and overlap intentionally, using exclusive end boundaries. Custom financial-event from/to filters are inclusive dates. Dashboard bins are 0–6, 7–13, 14–20, 21–27 and 28–29 days, summing to the same next-30-day count. Premium totals exclude principal, instalments, interest and maturity. Upcoming Revenue is expected commission, counted once per distinct product within that same event window.
 

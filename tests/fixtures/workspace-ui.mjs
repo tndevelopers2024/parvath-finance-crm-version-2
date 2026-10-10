@@ -118,6 +118,16 @@ export const leads = clients.map((c, i) => ({
   activities: [],
   history: [],
 }));
+// Thirty-one more leads in one stage, so the board has a column longer than one page.
+leads.push(
+  ...Array.from({ length: 31 }, (_, i) => ({
+    ...leads[0],
+    id: "lead-extra-" + i,
+    createdAt: new Date(
+      Date.UTC(2026, 9, 4, 6, 0, 0) - i * 60000,
+    ).toISOString(),
+  })),
+);
 clients.forEach((c) => {
   c.products = products
     .filter((p) => p.clientId === c.id)
@@ -202,7 +212,7 @@ export const dashboard = {
     { name: "4 Weeks", count: 2 },
   ],
 };
-export function response(path) {
+export function response(path, params = new URLSearchParams()) {
   if (path === "/auth/me") return { data: user };
   if (path === "/dashboard") return { data: dashboard };
   if (path === "/clients/summary")
@@ -215,7 +225,8 @@ export function response(path) {
         attention: 18,
       },
     };
-  if (path === "/clients") return { data: clients, meta: { total: clients.length } };
+  if (path === "/clients")
+    return { data: clients, meta: { total: clients.length } };
   if (path.startsWith("/clients/"))
     return {
       data:
@@ -253,7 +264,21 @@ export function response(path) {
   if (path.startsWith("/renewals/")) return { data: events[0] };
   if (path === "/followups") return { data: followups, meta: { total: 3 } };
   if (path.startsWith("/followups/")) return { data: followups[0] };
-  if (path === "/leads") return { data: leads, meta: { total: 6 } };
+  if (path === "/leads") {
+    // Same contract as the API: stage and priority filter, then pages of `limit`, newest first.
+    const matching = leads
+      .filter((l) => !params.get("stage") || l.stage === params.get("stage"))
+      .filter(
+        (l) => !params.get("priority") || l.priority === params.get("priority"),
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const limit = Number(params.get("limit") || 50),
+      page = Number(params.get("page") || 1);
+    return {
+      data: matching.slice((page - 1) * limit, page * limit),
+      meta: { total: matching.length, page, limit },
+    };
+  }
   if (path.startsWith("/leads/")) return { data: leads[0] };
   if (path === "/providers") return { data: [definition.provider] };
   if (path === "/catalogue") return { data: [definition] };

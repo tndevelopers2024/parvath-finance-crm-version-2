@@ -83,34 +83,70 @@ const onboardingText = z.string().trim().max(1000).optional();
 const onboardingDate = z
   .union([businessDate, z.literal("")], "Enter a valid date.")
   .optional();
+// The business day is India's, whatever timezone this runs in.
+const todayInIndia = () =>
+  new Date(Date.now() + 19800000).toISOString().slice(0, 10);
+// Birth and start dates: a real date that is not later than today.
+const pastDate = onboardingDate.refine(
+  (v) => !v || v <= todayInIndia(),
+  "This date cannot be in the future.",
+);
+// Amounts may be written the way people write them (₹ 25,000 or Rs. 25,000.50) but must be plain money.
+const amountText = onboardingText.refine(
+  (v) =>
+    !v ||
+    /^\d{1,15}(?:\.\d{1,2})?$/.test(
+      v.replace(/^(?:₹|rs\.?)\s*/i, "").replace(/[,\s]/g, ""),
+    ),
+  "Enter an amount of 0 or more, such as 25000 or 25,000.50.",
+);
+// Values already saved are not re-checked when a record is edited and they are left untouched: only fields the
+// user has changed are held to the current rules. Returns the profile with its unchanged fields removed.
+export const withoutUnchanged = <T extends Record<string, unknown>>(
+  next: T | undefined,
+  stored: Record<string, unknown> | null | undefined,
+): T | undefined => {
+  if (!next || !stored) return next;
+  const same = (key: string) =>
+    key in stored && JSON.stringify(next[key]) === JSON.stringify(stored[key]);
+  return Object.fromEntries(
+    Object.entries(next).filter(([key]) => !same(key)),
+  ) as T;
+};
 export const onboardingProfileSchema = z.object({
   maritalStatus: onboardingText,
   spouseName: onboardingText,
-  spouseDob: onboardingDate,
+  spouseDob: pastDate,
   weddingDate: onboardingDate,
   children: z
     .array(
       z.object({
         name: onboardingText,
-        dob: onboardingDate,
+        dob: pastDate,
         relationship: onboardingText,
       }),
     )
     .max(20)
     .optional(),
-  dependents: onboardingText,
+  dependents: onboardingText.refine(
+    (v) => !v || /^\d{1,2}$/.test(v),
+    "Enter the number of dependents as a whole number from 0 to 99.",
+  ),
   sameAddress: z.boolean().optional(),
   permanentAddress: onboardingText,
-  pinCode: onboardingText,
+  pinCode: onboardingText.refine(
+    (v) => !v || /^[1-9]\d{2}\s?\d{3}$/.test(v),
+    "Enter a valid 6-digit PIN code, for example 600001.",
+  ),
   companyName: onboardingText,
   designation: onboardingText,
   professionalIndustry: onboardingText,
   experience: onboardingText,
   referredBy: onboardingText,
   clientCategory: onboardingText,
-  clientSince: onboardingDate,
-  monthlySavings: onboardingText,
-  totalSavings: onboardingText,
+  clientSince: pastDate,
+  monthlySavings: amountText,
+  totalSavings: amountText,
   investmentHorizon: onboardingText,
   financialGoals: z.array(z.string().max(80)).max(20).optional(),
   policies: z
@@ -228,9 +264,9 @@ export const clientSchema = z.object({
     .transform((v) => v ?? undefined),
   kind: z.enum(["Individual", "Business"]).default("Individual"),
   dob: businessDate
-    // A day's allowance so "today" holds in every timezone.
+    // Use the current business date in India, matching the date picker.
     .refine(
-      (v) => v <= new Date(Date.now() + 864e5).toISOString().slice(0, 10),
+      (v) => v <= new Date(Date.now() + 19800000).toISOString().slice(0, 10),
       "Date of birth cannot be in the future.",
     )
     .optional()

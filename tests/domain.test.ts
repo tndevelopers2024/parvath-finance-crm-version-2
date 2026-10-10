@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { clientSchema } from "../packages/contracts/src/index.js";
+import { describe, it, expect, vi } from "vitest";
+import {
+  clientSchema,
+  onboardingProfileSchema,
+  withoutUnchanged,
+} from "../packages/contracts/src/index.js";
 import {
   dateOnly,
   day,
@@ -20,6 +24,24 @@ describe("Domain boundaries", () => {
     expect(c.email).toBe("person@example.test");
     expect(c.gender).toBeUndefined();
     expect(c.dob).toBeUndefined();
+  });
+  it("uses the real clock unless a demo clock is set explicitly", async () => {
+    const saved = process.env.DEMO_DATE;
+    try {
+      // An empty value counts as unset and stops the .env file from supplying one.
+      process.env.DEMO_DATE = "";
+      vi.resetModules();
+      const real = await import("../apps/api/src/domain.js");
+      expect(Math.abs(real.now().getTime() - Date.now())).toBeLessThan(5000);
+      process.env.DEMO_DATE = "2026-09-04T06:30:00.000Z";
+      vi.resetModules();
+      const demo = await import("../apps/api/src/domain.js");
+      expect(demo.now().toISOString()).toBe("2026-09-04T06:30:00.000Z");
+      expect(demo.day()).toBe("2026-09-04");
+    } finally {
+      process.env.DEMO_DATE = saved;
+      vi.resetModules();
+    }
   });
   it("uses India midnight independently of UTC dates", () => {
     expect(day(new Date("2026-09-03T18:30:00Z"))).toBe("2026-09-04");
@@ -138,5 +160,92 @@ describe("Domain boundaries", () => {
         .toISOString()
         .slice(0, 10),
     ).toBe("2026-07-31");
+  });
+});
+
+describe("Client onboarding validation", () => {
+  it("rejects negative and fractional dependent counts", () => {
+    for (const dependents of ["-2", "1.5", "abc"]) {
+      expect(onboardingProfileSchema.safeParse({ dependents }).success).toBe(
+        false,
+      );
+    }
+    expect(onboardingProfileSchema.safeParse({ dependents: "0" }).success).toBe(
+      true,
+    );
+  });
+  it("rejects invalid postal codes and savings amounts", () => {
+    for (const profile of [
+      { pinCode: "ABC" },
+      { pinCode: "012345" },
+      { monthlySavings: "-500" },
+      { totalSavings: "abc" },
+    ]) {
+      expect(onboardingProfileSchema.safeParse(profile).success).toBe(false);
+    }
+    expect(
+      onboardingProfileSchema.safeParse({
+        pinCode: "600001",
+        monthlySavings: "25000",
+        totalSavings: "300000.50",
+      }).success,
+    ).toBe(true);
+  });
+  it("rejects tomorrow as a birth date using India's real current date", () => {
+    const tomorrow = new Date(Date.now() + 19800000 + 86400000)
+      .toISOString()
+      .slice(0, 10);
+    expect(
+      clientSchema.safeParse({
+        name: "QA Test",
+        phone: "9876504321",
+        dob: tomorrow,
+      }).success,
+    ).toBe(false);
+  });
+  it("accepts amounts and PIN codes written the usual way", () => {
+    const ok = onboardingProfileSchema.safeParse({
+      monthlySavings: "₹ 25,000",
+      totalSavings: "Rs. 3,00,000.50",
+      pinCode: "600 001",
+      dependents: "0",
+    });
+    expect(ok.success).toBe(true);
+    expect(
+      onboardingProfileSchema.safeParse({ dependents: "100" }).success,
+    ).toBe(false);
+  });
+  it("rejects future spouse, child and client-since dates but not past ones", () => {
+    const future = "2999-01-01";
+    expect(
+      onboardingProfileSchema.safeParse({ spouseDob: future }).success,
+    ).toBe(false);
+    expect(
+      onboardingProfileSchema.safeParse({ children: [{ dob: future }] })
+        .success,
+    ).toBe(false);
+    expect(
+      onboardingProfileSchema.safeParse({ clientSince: future }).success,
+    ).toBe(false);
+    expect(
+      onboardingProfileSchema.safeParse({
+        spouseDob: "1985-05-05",
+        children: [{ dob: "2015-01-01" }],
+        clientSince: "2020-02-29",
+      }).success,
+    ).toBe(true);
+  });
+  it("leaves values that were saved earlier out of the checks", () => {
+    const stored = {
+      dependents: "two",
+      children: [{ dob: "2999-01-01" }],
+      pinCode: "600001",
+    };
+    const next = { ...stored, pinCode: "ABC", companyName: "Example Co" };
+    expect(withoutUnchanged(next, stored)).toEqual({
+      pinCode: "ABC",
+      companyName: "Example Co",
+    });
+    expect(withoutUnchanged(next, undefined)).toBe(next);
   });
 });

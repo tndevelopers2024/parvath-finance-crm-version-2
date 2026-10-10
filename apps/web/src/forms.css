@@ -264,3 +264,41 @@ html.dark .form-error {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Lead board: the button that loads a stage's next page of cards. */
+.lead-column-cards button.lead-load-more {
+  align-self: stretch;
+  min-height: 34px;
+  border-style: dashed;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+/* A service that is not set up on the server: said plainly, with the action buttons held back. */
+.integration-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-danger-line);
+  border-radius: 8px;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Client list: the row actions (message, call, more, delete) stay in view while the other columns scroll. */
+.app-shell.workspace-redesign .clients-table th:last-child,
+.app-shell.workspace-redesign .clients-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--ws-surface);
+  box-shadow: -8px 0 8px -8px rgb(0 0 0 / 14%);
+}
+.app-shell.workspace-redesign .clients-table th:last-child {
+  background: var(--ws-soft);
+}
+.app-shell.workspace-redesign .clients-table th,
+.app-shell.workspace-redesign .clients-table td {
+  padding-inline: 10px;
+}

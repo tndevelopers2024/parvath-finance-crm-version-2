@@ -15,7 +15,7 @@ import {
   Lightbulb,
   Trash2,
 } from "lucide-react";
-import { date, rupees, useData, useWrite } from "./api";
+import { date, rupees, useData, useWrite, yearIST } from "./api";
 import {
   Avatar,
   Back,
@@ -58,13 +58,17 @@ export default function ClientProfile() {
   if (q.error) return <ErrorState error={q.error} />;
   const c = q.data.data;
   const onboarding = c.onboardingProfile || {};
-  const edit = (
-    <Link className="button small" to={`/clients/${id}/edit`}>
-      <Pencil size={13} />
-      Edit
-    </Link>
-  );
+  // Operations can read clients but not change them, so the link is not offered.
+  const edit =
+    user.role === "Operations" ? undefined : (
+      <Link className="button small" to={`/clients/${id}/edit`}>
+        <Pencil size={13} />
+        Edit
+      </Link>
+    );
   const next = c.events.find((e: any) => e.status === "Pending");
+  const storage = user.integrations?.documents;
+  const uploadBlocked = storage && !storage.available;
   const upload = async (f: File) => {
     const body = new FormData();
     body.append("file", f);
@@ -79,11 +83,21 @@ export default function ClientProfile() {
     <Panel
       title={`Documents (${c.documents.length})`}
       action={
-        <button className="text-link" onClick={() => file.current?.click()}>
+        <button
+          className="text-link"
+          disabled={uploadBlocked}
+          title={uploadBlocked ? storage.message : undefined}
+          onClick={() => file.current?.click()}
+        >
           Upload
         </button>
       }
     >
+      {uploadBlocked && (
+        <p className="integration-note" role="status">
+          {storage.message}
+        </p>
+      )}
       {c.documents.length ? (
         c.documents.map((d: any) => (
           <div className="document-row" key={d.id}>
@@ -114,7 +128,10 @@ export default function ClientProfile() {
         <Empty
           text="No documents yet"
           action={
-            <button onClick={() => file.current?.click()}>
+            <button
+              disabled={uploadBlocked}
+              onClick={() => file.current?.click()}
+            >
               Upload document
             </button>
           }
@@ -193,9 +210,7 @@ export default function ClientProfile() {
             <span className="profile-labels">
               <Badge>{c.kind}</Badge>
               <Badge tone="amber">Valued Client</Badge>
-              <Badge tone="neutral">
-                Since {new Date(c.createdAt).getFullYear()}
-              </Badge>
+              <Badge tone="neutral">Since {yearIST(c.createdAt)}</Badge>
             </span>
           </div>
           <div className="profile-header-actions">
@@ -310,11 +325,7 @@ export default function ClientProfile() {
                       [MapPin, "Address", c.address],
                       [Briefcase, "Occupation", c.occupation],
                       [Heart, "Preferred Contact", c.preferredContact],
-                      [
-                        CalendarDays,
-                        "Client Since",
-                        new Date(c.createdAt).getFullYear(),
-                      ],
+                      [CalendarDays, "Client Since", yearIST(c.createdAt)],
                       [UserRound, "Source", c.source],
                       [Pencil, "Notes", c.notesText],
                     ].map(([C, label, value]: any) => (
@@ -335,13 +346,15 @@ export default function ClientProfile() {
                       : "Family Details"
                   }
                   action={
-                    <button
-                      className="small"
-                      onClick={() => setRelationship(true)}
-                    >
-                      <Pencil size={13} />
-                      Edit
-                    </button>
+                    user.role === "Operations" ? undefined : (
+                      <button
+                        className="small"
+                        onClick={() => setRelationship(true)}
+                      >
+                        <Pencil size={13} />
+                        Edit
+                      </button>
+                    )
                   }
                 >
                   {c.relationships.length ? (

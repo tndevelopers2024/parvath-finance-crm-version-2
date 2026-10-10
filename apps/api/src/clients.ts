@@ -4,6 +4,7 @@ import { parse } from "csv-parse/sync";
 import {
   clientImportRowSchema,
   clientSchema,
+  withoutUnchanged,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
 import type { Database } from "./persistence/repository.js";
@@ -384,7 +385,10 @@ async function commitImportChunk(req: any, jobId: string) {
       });
       if (match) {
         p.skipped++;
-        p.errors.push({ row: r.row, error: "Duplicate detected during commit" });
+        p.errors.push({
+          row: r.row,
+          error: "Duplicate detected during commit",
+        });
         continue;
       }
       await createClient(tx, v, req.auth.organizationId, req.auth.userId, {
@@ -576,9 +580,23 @@ clients.get("/:id", async (req, res) => {
 });
 clients.patch("/:id", permit("edit"), async (req, res) => {
   const old = await owned("client", String(req.params.id), req);
+  // Onboarding details saved earlier are kept as they are; only the ones changed in this request are validated.
+  const body = req.body || {};
+  const storedProfile = old.onboardingJson
+    ? JSON.parse(old.onboardingJson)
+    : undefined;
+  const changedProfile =
+    body.onboardingProfile && typeof body.onboardingProfile === "object"
+      ? withoutUnchanged(body.onboardingProfile, storedProfile)
+      : body.onboardingProfile;
   const v = clientSchema
     .extend({ version: z.number().int().positive() })
-    .parse(req.body);
+    .parse({ ...body, onboardingProfile: changedProfile });
+  if (changedProfile && body.onboardingProfile !== changedProfile)
+    v.onboardingProfile = {
+      ...body.onboardingProfile,
+      ...v.onboardingProfile,
+    };
   const d = clientData(v);
   const original = await db.contact.findUniqueOrThrow({
     where: { id: old.contactId },

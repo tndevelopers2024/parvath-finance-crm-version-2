@@ -597,7 +597,10 @@ type Picked = { id: string; name: string; phone?: string; kind?: string };
 // client, and the send goes out in batches of 100, the server's per-request limit.
 function WhatsAppBroadcast() {
   const write = useWrite(),
-    toast = useToast();
+    toast = useToast(),
+    user = useAuth();
+  const connection = user.integrations?.whatsapp;
+  const unavailable = connection && !connection.available;
   const [search, setSearch] = useState(""),
     [term, setTerm] = useState(""),
     [picked, setPicked] = useState<Record<string, Picked>>({}),
@@ -718,6 +721,11 @@ function WhatsAppBroadcast() {
         Choose clients, then send one approved WhatsApp template. Each client
         gets the message as its {"{{1}}"} variable.
       </p>
+      {unavailable && (
+        <p className="integration-note" role="status">
+          {connection.message} No messages can be sent until then.
+        </p>
+      )}
       <div className="form-grid">
         <label className="full">
           Search clients
@@ -849,7 +857,11 @@ function WhatsAppBroadcast() {
           type="button"
           className="primary"
           disabled={
-            sending || !chosen.length || !template.trim() || !message.trim()
+            unavailable ||
+            sending ||
+            !chosen.length ||
+            !template.trim() ||
+            !message.trim()
           }
           onClick={() => void send()}
         >

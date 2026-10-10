@@ -184,6 +184,16 @@ export const date = (v: string | undefined) =>
         timeZone: "Asia/Kolkata",
       }).format(new Date(v))
     : "—";
+// The business day is always Asia/Kolkata, whatever timezone the browser is in.
+export const todayIST = () =>
+  new Date(Date.now() + 19800000).toISOString().slice(0, 10);
+export const yearIST = (v: string) =>
+  Number(
+    new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    }).format(new Date(v)),
+  );
 export const time = (v: string) =>
   new Intl.DateTimeFormat("en-IN", {
     hour: "2-digit",

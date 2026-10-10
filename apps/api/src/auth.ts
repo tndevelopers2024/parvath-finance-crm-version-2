@@ -6,6 +6,7 @@ import { rateLimit } from "express-rate-limit";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { HttpError, requireAuth } from "./security.js";
+import { integrations } from "./integrations.js";
 export const auth = Router();
 auth.use(
   rateLimit({
@@ -80,6 +81,7 @@ auth.get("/me", requireAuth, async (req, res) => {
       ...req.auth,
       csrf: req.session.csrf,
       demoDate: config.DEMO_DATE || null,
+      integrations: integrations(req.auth.role === "Administrator"),
     },
   });
 });

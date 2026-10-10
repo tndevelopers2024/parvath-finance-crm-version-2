@@ -6,7 +6,7 @@ import { onboardingProfileSchema } from "../../../packages/contracts/src/index";
 import type { z } from "zod";
 import { Avatar } from "./components";
 import DateField from "./DateField";
-import { date as showDate } from "./api";
+import { date as showDate, todayIST } from "./api";
 
 export type OnboardingProfile = z.input<typeof onboardingProfileSchema>;
 // The follow-up Type select reports "Select" as an empty string, which the channel enum rejects; send it as undefined.
@@ -23,6 +23,8 @@ export const cleanProfile = (profile: OnboardingProfile): OnboardingProfile =>
 type Props = {
   profile: OnboardingProfile;
   setProfile: (profile: OnboardingProfile) => void;
+  // Messages for values the current rules reject, keyed like "dependents" or "children.0.dob".
+  errors?: Record<string, string>;
   form: UseFormReturn<ClientInput>;
 };
 
@@ -91,7 +93,7 @@ function Text({
     </label>
   );
 }
-const today = () => new Date(Date.now() + 19800000).toISOString().slice(0, 10);
+const today = todayIST;
 
 function Choice({
   label,
@@ -154,11 +156,15 @@ function Rows({
   rows,
   onChange,
   addLabel,
+  name,
+  errors,
 }: {
   columns: { key: string; label: string; type?: string; max?: string }[];
   rows: Row[];
   onChange: (rows: Row[]) => void;
   addLabel: string;
+  name?: string;
+  errors?: Record<string, string>;
 }) {
   return (
     <div
@@ -180,6 +186,9 @@ function Rows({
                   i === index ? { ...item, [c.key]: value } : item,
                 ),
               );
+            const error = name
+              ? errors?.[`${name}.${index}.${c.key}`]
+              : undefined;
             return (
               // The caption shows only when rows stack on narrow screens; the header row labels them otherwise.
               <div className="onboard-cell" key={c.key}>
@@ -191,6 +200,7 @@ function Rows({
                     aria-label={`${c.label} ${index + 1}`}
                     value={row[c.key] || ""}
                     max={c.max}
+                    error={error}
                     onChange={put}
                   />
                 ) : (
@@ -198,8 +208,12 @@ function Rows({
                     aria-label={`${c.label} ${index + 1}`}
                     type={c.type || "text"}
                     value={row[c.key] || ""}
+                    aria-invalid={!!error}
                     onChange={(e) => put(e.target.value)}
                   />
+                )}
+                {error && c.type !== "date" && (
+                  <small className="field-error">{error}</small>
                 )}
               </div>
             );
@@ -224,7 +238,12 @@ function Rows({
   );
 }
 
-export function AdditionalDetails({ profile, setProfile, form }: Props) {
+export function AdditionalDetails({
+  profile,
+  setProfile,
+  form,
+  errors = {},
+}: Props) {
   const put = (key: keyof OnboardingProfile, value: any) =>
     setProfile({ ...profile, [key]: value });
   const { register } = form;
@@ -252,6 +271,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
                   type="date"
                   max={today()}
                   value={profile.spouseDob}
+                  error={errors.spouseDob}
                   onChange={(v) => put("spouseDob", v)}
                 />
                 <Text
@@ -270,6 +290,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
               label="No. of Dependents"
               type="number"
               value={profile.dependents}
+              error={errors.dependents}
               onChange={(v) => put("dependents", v)}
             />
           </div>
@@ -288,6 +309,8 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
                   { key: "relationship", label: "Relationship" },
                 ]}
                 rows={profile.children || []}
+                name="children"
+                errors={errors}
                 onChange={(v) => put("children", v)}
                 addLabel="Add Another Child"
               />
@@ -346,6 +369,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
               <Text
                 label="PIN Code"
                 value={profile.pinCode}
+                error={errors.pinCode}
                 onChange={(v) => put("pinCode", v)}
               />
             </div>
@@ -388,6 +412,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
               type="date"
               max={today()}
               value={profile.clientSince}
+              error={errors.clientSince}
               onChange={(v) => put("clientSince", v)}
             />
           </div>
@@ -397,7 +422,12 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
   );
 }
 
-export function FinancialProfile({ profile, setProfile, form }: Props) {
+export function FinancialProfile({
+  profile,
+  setProfile,
+  form,
+  errors = {},
+}: Props) {
   const put = (key: keyof OnboardingProfile, value: any) =>
     setProfile({ ...profile, [key]: value });
   const { register } = form;
@@ -424,11 +454,13 @@ export function FinancialProfile({ profile, setProfile, form }: Props) {
               <Text
                 label="Monthly Savings (Approx)"
                 value={profile.monthlySavings}
+                error={errors.monthlySavings}
                 onChange={(v) => put("monthlySavings", v)}
               />
               <Text
                 label="Total Savings (Approx)"
                 value={profile.totalSavings}
+                error={errors.totalSavings}
                 onChange={(v) => put("totalSavings", v)}
               />
             </div>
@@ -494,6 +526,8 @@ export function FinancialProfile({ profile, setProfile, form }: Props) {
             { key: "renewalDate", label: "Renewal Date", type: "date" },
           ]}
           rows={profile.policies || []}
+          name="policies"
+          errors={errors}
           onChange={(v) => put("policies", v)}
           addLabel="Add Insurance"
         />
@@ -520,6 +554,8 @@ export function FinancialProfile({ profile, setProfile, form }: Props) {
             { key: "closureDate", label: "Closure Date", type: "date" },
           ]}
           rows={profile.loans || []}
+          name="loans"
+          errors={errors}
           onChange={(v) => put("loans", v)}
           addLabel="Add Loan"
         />
@@ -547,6 +583,8 @@ export function FinancialProfile({ profile, setProfile, form }: Props) {
             { key: "expectedReturn", label: "Expected Return" },
           ]}
           rows={profile.investments || []}
+          name="investments"
+          errors={errors}
           onChange={(v) => put("investments", v)}
           addLabel="Add Investment"
         />
@@ -555,7 +593,7 @@ export function FinancialProfile({ profile, setProfile, form }: Props) {
   );
 }
 
-export function Preferences({ profile, setProfile, form }: Props) {
+export function Preferences({ profile, setProfile, form, errors = {} }: Props) {
   const put = (key: keyof OnboardingProfile, value: any) =>
     setProfile({ ...profile, [key]: value });
   return (
@@ -639,6 +677,8 @@ export function Preferences({ profile, setProfile, form }: Props) {
               { key: "description", label: "Description" },
             ]}
             rows={profile.importantDates || []}
+            name="importantDates"
+            errors={errors}
             onChange={(v) => put("importantDates", v)}
             addLabel="Add Date"
           />

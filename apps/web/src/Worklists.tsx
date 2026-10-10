@@ -1,6 +1,14 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarDays, Mail, MessageCircle, Phone } from "lucide-react";
-import { date, query, rupees, time, useData, useInfiniteData } from "./api";
+import {
+  date,
+  query,
+  rupees,
+  time,
+  todayIST,
+  useData,
+  useInfiniteData,
+} from "./api";
 import DateField from "./DateField";
 import DebouncedSearch from "./DebouncedSearch";
 import {
@@ -50,7 +58,7 @@ export default function Worklists({
     );
   const d = stats.data?.data || {},
     events = d.events || [],
-    today = d.today || "2026-09-04";
+    today = d.today || todayIST();
   const pending = events.filter((e: any) => e.status === "Pending");
   const rangeEvents = (days: number) =>
     pending.filter(

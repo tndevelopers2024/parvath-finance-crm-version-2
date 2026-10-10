@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { now } from "./domain.js";
+import { integrationStatus } from "./integrations.js";
 import { audit, holdClient, HttpError, owned, permit } from "./security.js";
 export const s3 = new S3Client({
   region: config.S3_REGION,
@@ -38,8 +39,13 @@ documents.post(
   upload.single("file"),
   async (req, res) => {
     const c = await owned("client", String(req.params.id), req);
-    if (!config.S3_BUCKET)
-      throw new HttpError(503, "Private document storage is not configured");
+    // Refuse up front rather than store a file that can never be scanned or released.
+    const status = integrationStatus(
+      "documents",
+      req.auth.role === "Administrator",
+    );
+    if (!status.available)
+      throw new HttpError(503, status.message, { missing: status.missing });
     const f = req.file;
     if (!f)
       throw new HttpError(

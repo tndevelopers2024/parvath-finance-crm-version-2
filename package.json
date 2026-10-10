@@ -25,6 +25,7 @@
     "worker": "tsx apps/api/src/worker.ts",
     "test:browser": "node scripts/browser-check.mjs",
     "test:ui": "node scripts/workspace-ui-check.mjs",
+    "test:sweep": "node scripts/browser-sweep.mjs",
     "demo:cleanup": "tsx scripts/cleanup-demo-checks.ts",
     "docs:api": "node --import tsx scripts/generate-openapi.ts",
     "format:check": "prettier --check apps packages scripts tests",

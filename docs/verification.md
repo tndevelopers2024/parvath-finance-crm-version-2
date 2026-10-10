@@ -54,13 +54,15 @@ npm run typecheck
 npm test
 npm run build
 npx playwright install chromium
-npm run test:browser -- journeys
-npm run demo:cleanup
+npm run test:ui
+npm run test:browser -- journeys   # writes synthetic records; see browser-journeys.md
+npm run test:sweep                 # every page with seeded data; see browser-sweep.md
+npm run demo:cleanup -- --confirm-db=<MONGODB_DB>
 npm run test:browser -- visuals
 npm audit --omit=dev
 ```
 
-The browser scenarios are documented in [journeys](browser-journeys.md) and [visuals](browser-visuals.md). The runner materializes executable browser scripts in the operating system temporary directory. Use only the synthetic local workspace with the generated account in the ignored `.env`. HEADLESS=1 is supported for CI. The API/domain suite is configured in GitHub Actions with a MongoDB replica set; the updated CI job itself has not been executed here. Browser checks run locally.
+The browser scenarios are documented in [journeys](browser-journeys.md) (a script, `scripts/browser-journeys.mjs`) and [visuals](browser-visuals.md) (read from its document and materialized in the operating system temporary directory). `npm run test:ui` is the read-only responsive/interaction suite on fixture responses; the journeys are the live, writing checks. Use only the synthetic local workspace with the generated account in the ignored `.env`. HEADLESS=1 is supported for CI. The API/domain suite is configured in GitHub Actions with a MongoDB replica set; the updated CI job itself has not been executed here. Browser checks run locally.
 
 ## Release limitations
 
