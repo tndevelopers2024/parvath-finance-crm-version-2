@@ -27,8 +27,10 @@ import {
   Sun,
   PanelLeft,
 } from "lucide-react";
-import { api, useData } from "./api";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, forgetCsrf, useData } from "./api";
 import { Avatar, Loading, Modal, useAuth } from "./components";
+import ErrorBoundary from "./ErrorBoundary";
 import { Notifications } from "./Supporting";
 import { useTheme } from "./theme";
 const nav = [
@@ -40,7 +42,7 @@ const nav = [
   ["Leads", "/leads", Target],
   ["Products", "/products", Package],
   ["Providers", "/providers", House],
-  ["Engagement", "/engagement", MessageCircle],
+  ["WhatsApp", "/engagement", MessageCircle],
   ["Reports", "/reports", ChartNoAxesColumnIncreasing],
   ["Settings", "/settings", Settings],
 ] as const;
@@ -48,6 +50,7 @@ export default function Shell() {
   const user = useAuth(),
     location = useLocation(),
     navigate = useNavigate(),
+    qc = useQueryClient(),
     { resolvedTheme, toggleTheme } = useTheme();
   const [drawer, setDrawer] = useState(false),
     [search, setSearch] = useState(""),
@@ -373,8 +376,10 @@ export default function Shell() {
             <div
               ref={accountRef}
               className="account"
-              onMouseEnter={() => setAccount(true)}
-              onMouseLeave={() => setAccount(false)}
+              // Hover only for a real mouse: a tap also fires hover events, which
+              // would open the menu and let the click toggle it straight back shut.
+              onPointerEnter={(e) => e.pointerType === "mouse" && setAccount(true)}
+              onPointerLeave={(e) => e.pointerType === "mouse" && setAccount(false)}
             >
               <button
                 onClick={() => setAccount(!account)}
@@ -410,9 +415,17 @@ export default function Shell() {
                   </Link>
                   <button
                     onClick={async () => {
-                      await api("/auth/logout", { method: "POST" });
-                      navigate("/login");
-                      window.location.reload();
+                      // Sign out on screen even when the request fails.
+                      try {
+                        await api("/auth/logout", { method: "POST" });
+                      } catch {
+                        // Nothing to recover: the user asked to leave.
+                      } finally {
+                        forgetCsrf();
+                        navigate("/login");
+                        qc.clear();
+                        window.location.reload();
+                      }
                     }}
                   >
                     <LogOut size={16} />
@@ -429,7 +442,9 @@ export default function Shell() {
           </Modal>
         )}
         <main className="page-content">
-          <Outlet />
+          <ErrorBoundary resetKey={location.pathname + location.search}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

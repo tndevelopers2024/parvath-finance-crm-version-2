@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { config } from "./config.js";
+import { assertDemoDatabase, clearWorkspaceData } from "./demoGuard.js";
 import { dateOnly, now } from "./domain.js";
 import { stages } from "../../../packages/contracts/src/index.js";
 if (config.NODE_ENV === "production" || !config.DEMO_DATE)
@@ -16,20 +17,8 @@ const forceReset =
 if (await db.client.count({ where: { organizationId: org } })) {
   if (forceReset) {
     console.log("Reset flag detected. Clearing previous records for fresh Tamil Nadu demo seed...");
-    await db.financialEvent.deleteMany({ where: { organizationId: org } });
-    await db.clientProduct.deleteMany({ where: { organizationId: org } });
-    await db.opportunityStageHistory.deleteMany({});
-    await db.opportunity.deleteMany({ where: { organizationId: org } });
-    await db.followUp.deleteMany({ where: { organizationId: org } });
-    await db.communication.deleteMany({ where: { client: { organizationId: org } } });
-    await db.activity.deleteMany({ where: { organizationId: org } });
-    await db.note.deleteMany({ where: { client: { organizationId: org } } });
-    await db.contactRelationship.deleteMany({});
-    await db.clientTag.deleteMany({});
-    await db.client.deleteMany({ where: { organizationId: org } });
-    await db.contact.deleteMany({ where: { organizationId: org } });
-    await db.productDefinition.deleteMany({ where: { organizationId: org } });
-    await db.provider.deleteMany({ where: { organizationId: org } });
+    assertDemoDatabase("Resetting the demo seed");
+    await clearWorkspaceData(org);
   } else {
     console.log("Workspace has records; seed skipped to protect existing data. Use --reset to re-seed.");
     await db.close();

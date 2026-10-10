@@ -71,3 +71,22 @@
     min-height: 104px;
   }
 }
+
+.pagination .pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.pagination .pagination-size select {
+  width: auto;
+  min-height: 30px;
+  padding: 2px 26px 2px 8px;
+  font-size: inherit;
+}
+@media (max-width: 760px) {
+  .pagination .pagination-size {
+    margin-left: 0;
+  }
+}

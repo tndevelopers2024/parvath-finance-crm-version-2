@@ -79,18 +79,37 @@ export async function owned(model: string, id: string, req: Request) {
   if (!row) throw new HttpError(404, "Record not found");
   return row;
 }
-export async function validOwner(id: string, req: Request) {
-  if (
-    !(await db.membership.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: req.auth.organizationId,
-          userId: id,
-        },
+// `current` is the record's existing owner: it may stay assigned after that member is deactivated.
+export async function validOwner(id: string, req: Request, current?: string) {
+  const m = await db.membership.findUnique({
+    where: {
+      organizationId_userId: {
+        organizationId: req.auth.organizationId,
+        userId: id,
       },
+    },
+    include: { user: true },
+  });
+  if (!m) throw new HttpError(400, "Owner must belong to this workspace");
+  if (!m.user.active && id !== current)
+    throw new HttpError(400, "Owner must be an active workspace member");
+}
+// Creating a child record and deleting its client both write this per-client lock, so one of two
+// concurrent transactions is retried and sees the other's result instead of leaving an orphan.
+export async function holdClient(tx: any, clientId: string, req: Request) {
+  await tx.native
+    .collection("contactLocks")
+    .updateOne(
+      { _id: `client:${clientId}` },
+      { $inc: { revision: 1 } },
+      { session: tx.session, upsert: true },
+    );
+  if (
+    !(await tx.client.findFirst({
+      where: { id: clientId, organizationId: req.auth.organizationId },
     }))
   )
-    throw new HttpError(400, "Owner must belong to this workspace");
+    throw new HttpError(404, "Record not found");
 }
 export const audit = (
   tx: any,

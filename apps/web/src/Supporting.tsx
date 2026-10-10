@@ -1,5 +1,6 @@
 import CatalogueActions from "./CatalogueActions";
 import { useEffect, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   Link,
   useNavigate,
@@ -11,14 +12,22 @@ import {
   CalendarDays,
   CheckSquare,
   Laptop,
-  Mail,
   Moon,
   Plus,
   ShieldCheck,
   Sun,
   Users,
 } from "lucide-react";
-import { date, query, rupees, useData, useWrite } from "./api";
+import {
+  api,
+  date,
+  query,
+  rupees,
+  useData,
+  useInfiniteData,
+  useWrite,
+} from "./api";
+import DebouncedSearch from "./DebouncedSearch";
 import {
   Avatar,
   Badge,
@@ -32,7 +41,7 @@ import {
   Modal,
   PageHeading,
   Panel,
-  Pagination,
+  InfiniteScroll,
   Tabs,
   ProductIcon,
   SearchInput,
@@ -51,7 +60,6 @@ export function ProductClients({
   const [productSearch, setProductSearch] = useState("");
   const category =
     selectedCategory || routeCategory || params.get("category") || "";
-  const page = Math.max(1, Number(params.get("page")) || 1);
   const requestParams = new URLSearchParams();
   if (category) requestParams.set("category", category);
   for (const key of ["q", "definitionId", "clientId"]) {
@@ -60,21 +68,7 @@ export function ProductClients({
   }
   const status = params.get("status");
   if (status && status !== "All") requestParams.set("status", status);
-  requestParams.set("limit", "25");
-  requestParams.set("page", String(page));
-  const q = useData("/products?" + requestParams.toString());
-  useEffect(() => {
-    if (q.data && page > 1 && !q.data.data.length && q.data.meta.total > 0) {
-      setParams(
-        (previous) => {
-          const next = new URLSearchParams(previous);
-          next.delete("page");
-          return next;
-        },
-        { replace: true },
-      );
-    }
-  }, [q.data, page, setParams]);
+  const q = useInfiniteData("/products?" + requestParams.toString());
   const catalogue = useData("/catalogue");
   const productSummary = useData("/products/summary", productsOpen);
   const availableProducts = (catalogue.data?.data || []).filter(
@@ -89,14 +83,17 @@ export function ProductClients({
       (catalogue.data?.data || []).map((p: any) => p.category),
     ),
   ].sort();
-  const change = (key: string, value: string) =>
-    setParams((previous) => {
-      const next = new URLSearchParams(previous);
-      if (value) next.set(key, value);
-      else next.delete(key);
-      if (key !== "page") next.delete("page");
-      return next;
-    });
+  const change = (key: string, value: string, replace = false) =>
+    setParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        if (key !== "page") next.delete("page");
+        return next;
+      },
+      { replace },
+    );
   const filtered = [
     "q",
     "definitionId",
@@ -303,9 +300,9 @@ export function ProductClients({
             onChange={(value) => change("status", value)}
           />
           <div className="product-toolbar">
-            <SearchInput
+            <DebouncedSearch
               value={params.get("q") || ""}
-              onChange={(value) => change("q", value)}
+              onCommit={(value) => change("q", value, true)}
               placeholder="Search product, client or identifier..."
             />
             {!routeCategory && !selectedCategory && (
@@ -345,7 +342,14 @@ export function ProductClients({
           ) : q.error ? (
             <ErrorState error={q.error} retry={q.refetch} />
           ) : q.data.data.length ? (
-            <>
+            <InfiniteScroll
+              hasMore={q.hasMore}
+              loadingMore={q.loadingMore}
+              onLoadMore={q.loadMore}
+              shown={q.data.data.length}
+              total={q.data.meta.total}
+              noun="policies and accounts"
+            >
               <div className="table-scroll">
                 <table className="products-table">
                   <thead>
@@ -417,13 +421,7 @@ export function ProductClients({
                   </tbody>
                 </table>
               </div>
-              <Pagination
-                total={q.data.meta.total}
-                page={page}
-                limit={25}
-                onChange={(value) => change("page", String(value))}
-              />
-            </>
+            </InfiniteScroll>
           ) : (
             <div className="product-empty">
               <Empty
@@ -460,9 +458,6 @@ export function ProductClients({
 }
 export function Engagement({ compose = false }: { compose?: boolean }) {
   const [params] = useSearchParams(),
-    q = useData(
-      "/communications?" + query({ clientId: params.get("clientId") }),
-    ),
     write = useWrite(),
     toast = useToast();
   const [channel, setChannel] = useState(params.get("channel") || "WhatsApp"),
@@ -496,13 +491,13 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
   return (
     <>
       <PageHeading
-        title={compose ? "Communication Composer" : "Engagement"}
-        subtitle="Keep an honest record of conversations and relationship touchpoints."
+        title={compose ? "Communication Composer" : "WhatsApp"}
+        subtitle="Send WhatsApp messages to many clients at once and keep a record of every conversation."
         actions={
           !compose ? (
             <Link className="button primary" to="/engagement/new">
               <Plus size={16} />
-              Prepare Message
+              Single message
             </Link>
           ) : undefined
         }
@@ -571,9 +566,9 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
             <div className="tip">
               <ShieldCheck />
               <p>
-                Opening an app is recorded as “Conversation opened”. Sent,
-                delivery and reply events require verified provider callbacks.
-                Automated delivery is currently unavailable.
+                Opening WhatsApp here is recorded as “Conversation opened”, but
+                delivery is not assumed. Use the broadcast panel to send one
+                approved message to many clients.
               </p>
             </div>
             <FormError error={write.error} />
@@ -591,33 +586,279 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
           {clientId && <ConsentForm clientId={clientId} />}
         </Panel>
       )}
-      <Panel title="Communication History">
-        {q.isPending ? (
-          <Loading />
-        ) : q.error ? (
-          <ErrorState error={q.error} />
-        ) : q.data.data.length ? (
-          q.data.data.map((c: any) => (
-            <div className="record-row" key={c.id}>
-              <span className="product-icon mint">
-                <Mail size={18} />
-              </span>
-              <span>
-                <Link to={"/clients/" + c.clientId}>
-                  <strong>{c.client.name}</strong>
-                </Link>
-                <small>
-                  {c.channel} · {c.event} · {date(c.createdAt)}
-                </small>
-                <p>{c.body}</p>
-              </span>
-            </div>
-          ))
-        ) : (
-          <Empty text="No communications recorded yet" />
-        )}
-      </Panel>
+      {!compose && <WhatsAppBroadcast />}
     </>
+  );
+}
+const broadcastBatch = 100;
+const broadcastLimit = 1000;
+type Picked = { id: string; name: string; phone?: string; kind?: string };
+// Sends one approved WhatsApp template to many clients. The picker pages through every
+// client, and the send goes out in batches of 100, the server's per-request limit.
+function WhatsAppBroadcast() {
+  const write = useWrite(),
+    toast = useToast();
+  const [search, setSearch] = useState(""),
+    [term, setTerm] = useState(""),
+    [picked, setPicked] = useState<Record<string, Picked>>({}),
+    [template, setTemplate] = useState(""),
+    [language, setLanguage] = useState("en_US"),
+    [message, setMessage] = useState(""),
+    [sending, setSending] = useState(false),
+    [progress, setProgress] = useState(""),
+    [sendError, setSendError] = useState(""),
+    [result, setResult] = useState<any>(null);
+  useEffect(() => {
+    const timer = setTimeout(() => setTerm(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+  const clients = useInfiniteQuery<any, Error>({
+    queryKey: ["broadcast-clients", term],
+    queryFn: ({ pageParam }) =>
+      api(
+        "/clients?" +
+          query({
+            q: term,
+            sort: "name",
+            direction: "asc",
+            limit: 100,
+            page: pageParam,
+          }),
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last: any) =>
+      last?.meta && last.meta.page * last.meta.limit < last.meta.total
+        ? last.meta.page + 1
+        : undefined,
+  });
+  const rows: Picked[] = (clients.data?.pages || []).flatMap(
+    (page: any) => page?.data || [],
+  );
+  const chosen = Object.values(picked);
+  const toggle = (row: Picked) =>
+    setPicked((current) => {
+      const next = { ...current };
+      if (next[row.id]) delete next[row.id];
+      else if (Object.keys(next).length < broadcastLimit)
+        next[row.id] = {
+          id: row.id,
+          name: row.name,
+          phone: row.phone,
+          kind: row.kind,
+        };
+      return next;
+    });
+  const selectLoaded = () =>
+    setPicked((current) => {
+      const next = { ...current };
+      for (const row of rows) {
+        if (Object.keys(next).length >= broadcastLimit) break;
+        next[row.id] = {
+          id: row.id,
+          name: row.name,
+          phone: row.phone,
+          kind: row.kind,
+        };
+      }
+      return next;
+    });
+  const send = async () => {
+    if (!chosen.length || !template.trim() || !message.trim()) return;
+    if (
+      !window.confirm(
+        `Send this WhatsApp message to ${chosen.length} selected client${chosen.length === 1 ? "" : "s"}? Clients without a phone number or WhatsApp consent are skipped.`,
+      )
+    )
+      return;
+    setSending(true);
+    setSendError("");
+    setResult(null);
+    const total = {
+      sent: 0,
+      failed: 0,
+      skipped: [] as any[],
+      failures: [] as any[],
+    };
+    const ids = chosen.map((c) => c.id);
+    const batches = Math.ceil(ids.length / broadcastBatch);
+    try {
+      for (let i = 0; i < ids.length; i += broadcastBatch) {
+        setProgress(`Sending batch ${i / broadcastBatch + 1} of ${batches}…`);
+        const response: any = await write.mutateAsync({
+          path: "/whatsapp/broadcasts",
+          body: {
+            clientIds: ids.slice(i, i + broadcastBatch),
+            template: template.trim(),
+            language: language.trim() || "en_US",
+            message: message.trim(),
+          },
+        });
+        total.sent += response.data.sent;
+        total.failed += response.data.failed;
+        total.skipped.push(...response.data.skipped);
+        total.failures.push(...response.data.failures);
+      }
+      setResult(total);
+      setPicked({});
+      setMessage("");
+      toast(`Broadcast sent to ${total.sent} clients`);
+    } catch (error) {
+      setSendError(
+        (error as Error).message ||
+          "The broadcast stopped. Check the history below before retrying.",
+      );
+    } finally {
+      setSending(false);
+      setProgress("");
+    }
+  };
+  return (
+    <Panel title="Broadcast to many clients" className="record-form">
+      <p className="muted">
+        Choose clients, then send one approved WhatsApp template. Each client
+        gets the message as its {"{{1}}"} variable.
+      </p>
+      <div className="form-grid">
+        <label className="full">
+          Search clients
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name, phone or email"
+          />
+        </label>
+      </div>
+      <div className="broadcast-list" role="group" aria-label="Clients">
+        {clients.isPending ? (
+          <Loading />
+        ) : clients.error ? (
+          <ErrorState error={clients.error} retry={clients.refetch} />
+        ) : rows.length ? (
+          <>
+            {rows.map((row) => (
+              <label className="broadcast-row" key={row.id}>
+                <input
+                  type="checkbox"
+                  checked={!!picked[row.id]}
+                  onChange={() => toggle(row)}
+                />
+                <span>
+                  <strong>{row.name}</strong>
+                  <small>
+                    {row.phone || "No phone number"}
+                    {row.kind ? ` · ${row.kind}` : ""}
+                  </small>
+                </span>
+              </label>
+            ))}
+            {clients.hasNextPage && (
+              <button
+                type="button"
+                className="client-combobox-load-more"
+                disabled={clients.isFetchingNextPage}
+                onClick={() => clients.fetchNextPage()}
+              >
+                {clients.isFetchingNextPage ? "Loading…" : "Load more clients"}
+              </button>
+            )}
+          </>
+        ) : (
+          <Empty text="No clients match this search" />
+        )}
+      </div>
+      <div className="modal-actions">
+        <span className="muted">
+          {chosen.length} selected (max {broadcastLimit})
+        </span>
+        <button type="button" onClick={selectLoaded} disabled={!rows.length}>
+          Select all shown
+        </button>
+        <button
+          type="button"
+          onClick={() => setPicked({})}
+          disabled={!chosen.length}
+        >
+          Clear selection
+        </button>
+      </div>
+      <div className="form-grid">
+        <label>
+          Approved template name *
+          <input
+            value={template}
+            onChange={(e) => setTemplate(e.target.value)}
+            placeholder="e.g. policy_renewal_reminder"
+          />
+        </label>
+        <label>
+          Template language
+          <input
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            placeholder="en_US"
+          />
+        </label>
+        <label className="full">
+          Message (fills the template’s {"{{1}}"}) *
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={1000}
+            placeholder="Type the message that every selected client will receive…"
+          />
+        </label>
+      </div>
+      {sendError && (
+        <div role="alert" className="form-error">
+          {sendError}
+        </div>
+      )}
+      {result && (
+        <div className="broadcast-result">
+          <strong>
+            {result.sent} sent · {result.failed} failed ·{" "}
+            {result.skipped.length} skipped
+          </strong>
+          {result.skipped.length > 0 && (
+            <ul>
+              {result.skipped.slice(0, 20).map((s: any) => (
+                <li key={s.clientId}>
+                  {s.name}: {s.reason}
+                </li>
+              ))}
+              {result.skipped.length > 20 && (
+                <li>and {result.skipped.length - 20} more skipped</li>
+              )}
+            </ul>
+          )}
+          {result.failures.length > 0 && (
+            <ul>
+              {result.failures.slice(0, 20).map((f: any) => (
+                <li key={f.clientId}>
+                  {f.name}: {f.error}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="modal-actions">
+        {progress && <span className="muted">{progress}</span>}
+        <button
+          type="button"
+          className="primary"
+          disabled={
+            sending || !chosen.length || !template.trim() || !message.trim()
+          }
+          onClick={() => void send()}
+        >
+          {sending
+            ? "Sending…"
+            : `Send to ${chosen.length} client${chosen.length === 1 ? "" : "s"}`}
+        </button>
+      </div>
+    </Panel>
   );
 }
 function ConsentForm({ clientId }: { clientId: string }) {
@@ -709,6 +950,7 @@ export function Reports() {
           {
             label: "Premiums Due · 30 Days",
             value: rupees(d.premiumDueMinor),
+            note: rupees(d.premiumOverdueMinor) + " overdue",
             icon: "renewals",
             to: "/renewals?range=Next+30+Days",
           },
@@ -811,8 +1053,9 @@ export function Reports() {
           </dd>
           <dt>Premiums Due</dt>
           <dd>
-            Insurance renewal and premium payment amounts only. Principal,
-            instalments, interest and maturity proceeds are excluded.
+            Outstanding insurance renewal and premium payment amounts only,
+            after recorded payments. Overdue premiums are shown separately.
+            Principal, instalments, interest and maturity proceeds are excluded.
           </dd>
           <dt>Upcoming Revenue</dt>
           <dd>
@@ -842,10 +1085,12 @@ export function Notifications({ onClose }: { onClose?: () => void } = {}) {
     navigate = useNavigate();
   return (
     <>
-      {!onClose && <PageHeading
-        title="Notifications"
-        subtitle="Your reminders and workspace updates."
-      />}
+      {!onClose && (
+        <PageHeading
+          title="Notifications"
+          subtitle="Your reminders and workspace updates."
+        />
+      )}
       <Panel className="notifications-list">
         {q.isPending ? (
           <Loading />
@@ -859,9 +1104,13 @@ export function Notifications({ onClose }: { onClose?: () => void } = {}) {
               }
               key={n.id}
               onClick={async () => {
-                await write.mutateAsync({
-                  path: `/notifications/${n.id}/read`,
-                });
+                try {
+                  await write.mutateAsync({
+                    path: `/notifications/${n.id}/read`,
+                  });
+                } catch {
+                  /* Marking read is best effort; still open the link. */
+                }
                 onClose?.();
                 navigate(n.link);
               }}
@@ -1131,29 +1380,69 @@ export function Settings() {
                         <Avatar name={m.user.name} />
                         <span>
                           <strong>{m.user.name}</strong>
-                          <small>{m.role}</small>
+                          <small>
+                            {m.role}
+                            {m.user.active === false && " · Deactivated"}
+                          </small>
                         </span>
                         {user.role === "Administrator" &&
                           m.user.id !== user.userId && (
-                            <select
-                              aria-label={"Role for " + m.user.name}
-                              className="role-select"
-                              value={m.role}
-                              onChange={async (e) => {
-                                try {
-                                  await write.mutateAsync({
-                                    path: "/members/" + m.id,
-                                    method: "PATCH",
-                                    body: { role: e.target.value },
-                                  });
-                                  toast("Role updated");
-                                } catch {
-                                  /* Render error */
-                                }
-                              }}
-                            >
-                              <option>Administrator</option>
-                            </select>
+                            <>
+                              <select
+                                aria-label={"Role for " + m.user.name}
+                                className="role-select"
+                                value={m.role}
+                                onChange={async (e) => {
+                                  try {
+                                    await write.mutateAsync({
+                                      path: "/members/" + m.id,
+                                      method: "PATCH",
+                                      body: { role: e.target.value },
+                                    });
+                                    toast("Role updated");
+                                  } catch {
+                                    /* Render error */
+                                  }
+                                }}
+                              >
+                                {memberRoles.map((r) => (
+                                  <option key={r}>{r}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                className="small"
+                                disabled={write.isPending}
+                                onClick={async () => {
+                                  const active = m.user.active === false;
+                                  if (
+                                    !active &&
+                                    !window.confirm(
+                                      `Deactivate ${m.user.name}? They will be signed out and unable to sign in.`,
+                                    )
+                                  )
+                                    return;
+                                  try {
+                                    await write.mutateAsync({
+                                      path: "/members/" + m.id,
+                                      method: "PATCH",
+                                      body: { active },
+                                    });
+                                    toast(
+                                      active
+                                        ? "Member reactivated"
+                                        : "Member deactivated",
+                                    );
+                                  } catch {
+                                    /* Render error */
+                                  }
+                                }}
+                              >
+                                {m.user.active === false
+                                  ? "Reactivate"
+                                  : "Deactivate"}
+                              </button>
+                            </>
                           )}
                       </div>
                     ))}
@@ -1174,6 +1463,7 @@ export function Settings() {
   );
 }
 
+const memberRoles = ["Administrator", "Adviser", "Operations"];
 function MemberManager() {
   const [show, setShow] = useState(false),
     write = useWrite(),
@@ -1210,7 +1500,8 @@ function MemberManager() {
             </label>
             <label>
               Role
-              <select name="role">
+              <select name="role" defaultValue="Administrator">
+                {/* For now, new members can only be added as Administrators. */}
                 <option>Administrator</option>
               </select>
             </label>

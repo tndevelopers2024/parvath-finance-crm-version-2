@@ -29,6 +29,8 @@ auth.post(
   rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 15,
+    // An office behind one address must not lock itself out by signing in normally.
+    skipSuccessfulRequests: true,
     handler: (_req, _res, next) =>
       next(
         new HttpError(

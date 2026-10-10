@@ -1,5 +1,5 @@
 import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
-import { addDays, addMonths } from "date-fns";
+import { addDays } from "date-fns";
 import { config } from "./config.js";
 export const now = () =>
   config.DEMO_DATE ? new Date(config.DEMO_DATE) : new Date();
@@ -9,8 +9,65 @@ export const dateOnly = (s: string) =>
   new Date(`${s.slice(0, 10)}T00:00:00.000Z`);
 export const datePlus = (s: string, n: number) =>
   addDays(dateOnly(s), n).toISOString().slice(0, 10);
-export const nextEventDate = (date: Date, months: number) =>
-  addMonths(date, months);
+// Month arithmetic on UTC components, clamped to the last day of the target
+// month, so a date-only value never depends on the server process timezone.
+const utcAddMonths = (date: Date, months: number) => {
+  const m = date.getUTCFullYear() * 12 + date.getUTCMonth() + months;
+  const lastDay = new Date(Date.UTC(Math.floor(m / 12), (m % 12) + 1, 0));
+  return new Date(
+    Date.UTC(
+      Math.floor(m / 12),
+      m % 12,
+      Math.min(date.getUTCDate(), lastDay.getUTCDate()),
+    ),
+  );
+};
+const monthsBetween = (from: Date, to: Date) =>
+  (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+  to.getUTCMonth() -
+  from.getUTCMonth();
+// The first anchor + k × months (k ≥ 1) strictly after `after`. The anchor's
+// day-of-month is the intended day, so a 31st clamped to 28 Feb returns to the
+// 31st instead of drifting. With no `after` this is simply anchor + months.
+export const nextEventDate = (
+  anchor: Date,
+  months: number,
+  after: Date = anchor,
+) => {
+  let k = Math.max(1, Math.floor(monthsBetween(anchor, after) / months));
+  while (utcAddMonths(anchor, k * months) <= after) k++;
+  return utcAddMonths(anchor, k * months);
+};
+// The series has no stored anchor, so it is the earliest of `candidates`
+// (events of the same product, type and recurrence) whose clamped steps land
+// exactly on `date`. A hand-moved date matches none and anchors itself.
+export const recurrenceAnchor = (
+  candidates: Date[],
+  date: Date,
+  months: number,
+) =>
+  candidates
+    .filter((c) => {
+      const n = monthsBetween(c, date);
+      return (
+        n > 0 &&
+        n % months === 0 &&
+        utcAddMonths(c, n).getTime() === date.getTime()
+      );
+    })
+    .sort((a, b) => a.getTime() - b.getTime())[0] || date;
+// Money still owed on an event: amount less net payments (reversals are
+// negative rows). Only a pending event owes anything.
+export const paidMinor = (e: { payments: { amountMinor: bigint }[] }) =>
+  e.payments.reduce((a, p) => a + p.amountMinor, 0n);
+export const outstandingMinor = (e: {
+  status: string;
+  amountMinor: bigint;
+  payments: { amountMinor: bigint }[];
+}) => {
+  const due = e.status === "Pending" ? e.amountMinor - paidMinor(e) : 0n;
+  return due > 0n ? due : 0n;
+};
 export function timing(
   f: { state: string; dueAt: Date },
   timezone = "Asia/Kolkata",
@@ -27,6 +84,7 @@ export function eventTiming(
   timezone = "Asia/Kolkata",
 ) {
   if (e.status === "Confirmed") return "Renewed";
+  if (e.status === "Cancelled") return "Cancelled";
   const d = e.dueDate.toISOString().slice(0, 10);
   return d < day(now(), timezone)
     ? "Overdue"
@@ -80,7 +138,11 @@ export const contactHistoryFilter = {
   event: "Manual outcome",
   NOT: { body: { in: ["No answer", "Not needed"] } },
 };
-export const flattenClient = (c: any) => ({
+// A child row whose client no longer exists must not fail the whole list; it is shown as such instead.
+const missingClient = { id: "", name: "Deleted client", missing: true };
+export const flattenClient = (c: any): any =>
+  c ? flattenExisting(c) : missingClient;
+const flattenExisting = (c: any) => ({
   ...c,
   onboardingProfile: c.onboardingJson
     ? JSON.parse(c.onboardingJson)

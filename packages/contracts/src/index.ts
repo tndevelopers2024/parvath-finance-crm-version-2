@@ -1,4 +1,53 @@
 import { z } from "zod";
+// Plain-language wording for every schema here, shown to staff as-is by the web forms and the API's 422 responses.
+// A message given on an individual rule still wins over these.
+const blank = (v: unknown) =>
+  v === undefined || v === null || (typeof v === "string" && !v.trim());
+z.config({
+  customError: (issue) => {
+    const limit = (n: unknown) => Number(n).toLocaleString("en-IN");
+    switch (issue.code) {
+      case "invalid_type":
+        return blank(issue.input)
+          ? "This is required."
+          : issue.expected === "number" || issue.expected === "int"
+            ? "Enter a number."
+            : "Enter a valid value.";
+      case "too_small":
+        return issue.origin === "string"
+          ? blank(issue.input)
+            ? "This is required."
+            : `Enter at least ${limit(issue.minimum)} characters.`
+          : issue.origin === "array" || issue.origin === "set"
+            ? `Add at least ${limit(issue.minimum)}.`
+            : `Enter ${limit(issue.minimum)} or more.`;
+      case "too_big":
+        return issue.origin === "string"
+          ? `Keep this to ${limit(issue.maximum)} characters or fewer.`
+          : issue.origin === "array" || issue.origin === "set"
+            ? `No more than ${limit(issue.maximum)} can be added.`
+            : `Enter ${limit(issue.maximum)} or less.`;
+      case "invalid_format":
+        return blank(issue.input)
+          ? "This is required."
+          : issue.format === "email"
+            ? "Enter a valid email address, for example name@example.com."
+            : issue.format === "uuid"
+              ? "Choose an option from the list."
+              : issue.format === "datetime"
+                ? "Choose a valid date and time."
+                : "This is not in the expected format.";
+      case "invalid_value":
+        return "Choose one of the available options.";
+      case "invalid_union":
+        return blank(issue.input)
+          ? "This is required."
+          : "Enter a valid value.";
+      default:
+        return undefined;
+    }
+  },
+});
 export const stages = [
   "New Enquiries",
   "Contacted",
@@ -9,11 +58,11 @@ export const stages = [
 ] as const;
 export const businessDate = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Enter a valid date.", abort: true })
   .refine((v) => {
     const d = new Date(v + "T00:00:00Z");
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
-  }, "Enter a valid calendar date");
+  }, "Enter a valid date.");
 export const channels = ["Call", "WhatsApp", "Email", "Meeting"] as const;
 export const eventTypes = [
   "Insurance renewal",
@@ -31,7 +80,9 @@ const optionalText = z
   .nullable()
   .transform((v) => v ?? undefined);
 const onboardingText = z.string().trim().max(1000).optional();
-const onboardingDate = businessDate.or(z.literal("")).optional();
+const onboardingDate = z
+  .union([businessDate, z.literal("")], "Enter a valid date.")
+  .optional();
 export const onboardingProfileSchema = z.object({
   maritalStatus: onboardingText,
   spouseName: onboardingText,
@@ -131,28 +182,57 @@ export const onboardingProfileSchema = z.object({
     )
     .optional(),
 });
+// Indian mobiles (optional +91 / 91 / 0 prefix) must start 6-9; other "+" numbers are international and
+// only checked for E.164 shape. Applies to input only; stored numbers are never re-validated.
+const indianMobile = /^(?:\+91|91|0)?([6-9]\d{9})$/;
 export const phone = z
   .string()
   .transform((v) => v.replace(/[\s()-]/g, ""))
-  .transform((v) => (/^\d{10}$/.test(v) ? `+91${v}` : v))
+  .transform((v) => {
+    const m = indianMobile.exec(v);
+    return m ? `+91${m[1]}` : v;
+  })
   .pipe(
     z
       .string()
-      .regex(
-        /^\+[1-9]\d{7,14}$/,
-        "Enter a valid phone number including country code",
+      .regex(/^\+[1-9]\d{7,14}$/, {
+        error: (issue) =>
+          blank(issue.input)
+            ? "Enter a phone number."
+            : "Enter a 10-digit mobile number starting with 6–9, or an international number with its country code (for example +44…).",
+      })
+      .refine(
+        (v) => !v.startsWith("+91") || /^\+91[6-9]\d{9}$/.test(v),
+        "Indian mobile numbers have 10 digits and start with 6, 7, 8 or 9.",
       ),
   );
 export const clientSchema = z.object({
-  name: z.string().trim().min(2).max(120),
+  name: z
+    .string()
+    .trim()
+    .min(2, {
+      error: (issue) =>
+        blank(issue.input)
+          ? "Enter the client's name."
+          : "The name needs at least 2 characters.",
+    })
+    .max(120, "Keep the name to 120 characters or fewer."),
   phone,
   email: z
-    .union([z.email().transform((v) => v.toLowerCase().trim()), z.literal("")])
+    .union(
+      [z.email().transform((v) => v.toLowerCase().trim()), z.literal("")],
+      "Enter a valid email address, for example name@example.com.",
+    )
     .optional()
     .nullable()
     .transform((v) => v ?? undefined),
   kind: z.enum(["Individual", "Business"]).default("Individual"),
   dob: businessDate
+    // A day's allowance so "today" holds in every timezone.
+    .refine(
+      (v) => v <= new Date(Date.now() + 864e5).toISOString().slice(0, 10),
+      "Date of birth cannot be in the future.",
+    )
     .optional()
     .or(z.literal(""))
     .nullable()
@@ -177,6 +257,23 @@ export const clientSchema = z.object({
   version: z.number().int().positive().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 });
+// CSV import rows: blank cells mean "not provided" so schema defaults apply, and dates may be written
+// day-first (DD-MM-YYYY or DD/MM/YYYY, India). Output is the same shape as clientSchema.
+const blankToUndefined = (v: unknown) =>
+  typeof v === "string" && v.trim() === "" ? undefined : v;
+export const clientImportRowSchema = z.preprocess((raw) => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const row: Record<string, unknown> = { ...(raw as object) };
+  for (const key of ["kind", "source"]) row[key] = blankToUndefined(row[key]);
+  const dob = row.dob;
+  if (typeof dob === "string") {
+    const m = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/.exec(dob.trim());
+    row.dob = m
+      ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`
+      : dob.trim();
+  }
+  return row;
+}, clientSchema);
 export const opportunitySchema = z.object({
   clientId: z.uuid(),
   requirement: z.string().trim().min(2).max(200),
@@ -233,5 +330,28 @@ export const eventSchema = z.object({
   dueDate: businessDate,
   amountMinor: money,
   recurrenceMonths: z.number().int().min(1).max(120).optional(),
+});
+// Corrections to a pending event. The product and event type are fixed; a
+// field left out is unchanged and recurrenceMonths:null makes it one-time.
+export const eventUpdateSchema = z
+  .object({
+    dueDate: businessDate.optional(),
+    amountMinor: money.optional(),
+    recurrenceMonths: z.number().int().min(1).max(120).nullable().optional(),
+    version: z.number().int().positive(),
+  })
+  .refine(
+    (v) =>
+      v.dueDate !== undefined ||
+      v.amountMinor !== undefined ||
+      v.recurrenceMonths !== undefined,
+    "Provide a due date, amount or recurrence to correct",
+  );
+export const eventCancelSchema = z.object({
+  reason: z.string().trim().min(3).max(300),
+  version: z.number().int().positive(),
+});
+export const paymentReversalSchema = z.object({
+  reason: z.string().trim().min(3).max(300),
 });
 export type ClientInput = z.input<typeof clientSchema>;

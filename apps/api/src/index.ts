@@ -17,8 +17,13 @@ try {
 const server = app.listen(config.PORT, "0.0.0.0", () =>
   logger.info({ port: config.PORT }, "Parvath API listening"),
 );
+const stopWorker = config.INLINE_WORKER
+  ? (await import("./worker.js")).startWorker()
+  : undefined;
+if (stopWorker) logger.info("Job worker running inside the API process");
 const shutdown = () => {
   server.close(async () => {
+    await stopWorker?.();
     await db.close();
     process.exit(0);
   });

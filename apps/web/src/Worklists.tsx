@@ -1,6 +1,8 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarDays, Mail, MessageCircle, Phone } from "lucide-react";
-import { date, query, rupees, time, useData } from "./api";
+import { date, query, rupees, time, useData, useInfiniteData } from "./api";
+import DateField from "./DateField";
+import DebouncedSearch from "./DebouncedSearch";
 import {
   Avatar,
   Badge,
@@ -11,10 +13,9 @@ import {
   Loading,
   Metrics,
   PageHeading,
-  Pagination,
+  InfiniteScroll,
   Panel,
   ProductIcon,
-  SearchInput,
   Tabs,
 } from "./components";
 export default function Worklists({
@@ -26,19 +27,27 @@ export default function Worklists({
     [params, setParams] = useSearchParams();
   const stats = useData("/dashboard"),
     catalogue = useData("/catalogue");
-  const range = params.get("range") || "All",
-    page = Number(params.get("page") || 1),
-    limit = renewal ? 8 : 10;
-  const q = useData(
-    "/" + type + "?" + query({ ...Object.fromEntries(params), limit }),
+  const range = params.get("range") || "All";
+  const q = useInfiniteData(
+    "/" +
+      type +
+      "?" +
+      query({
+        ...Object.fromEntries(params),
+        page: undefined,
+        limit: undefined,
+      }),
   );
-  const change = (key: string, value: string) =>
-    setParams((p) => {
-      if (value) p.set(key, value);
-      else p.delete(key);
-      if (key !== "page") p.delete("page");
-      return p;
-    });
+  const change = (key: string, value: string, replace = false) =>
+    setParams(
+      (p) => {
+        if (value) p.set(key, value);
+        else p.delete(key);
+        if (key !== "page") p.delete("page");
+        return p;
+      },
+      { replace },
+    );
   const d = stats.data?.data || {},
     events = d.events || [],
     today = d.today || "2026-09-04";
@@ -59,12 +68,20 @@ export default function Worklists({
           value: rangeEvents(1).length,
           icon: "renewals",
           tone: "rose",
+          // Outstanding balances from the API, so part-payments are netted
+          // the same way everywhere; overdue premiums are a separate figure.
           note:
             rupees(
               rangeEvents(1)
                 .filter((e: any) => e.amountMeaning === "Premium due")
-                .reduce((a: bigint, e: any) => a + BigInt(e.amountMinor), 0n),
-            ) + " premiums",
+                .reduce(
+                  (a: bigint, e: any) => a + BigInt(e.outstandingMinor),
+                  0n,
+                ),
+            ) +
+            " premiums · " +
+            rupees(d.premiumOverdueMinor) +
+            " overdue",
           to: "/renewals?range=Today",
         },
         {
@@ -85,7 +102,9 @@ export default function Worklists({
         },
         {
           label: "Already Renewed",
-          value: events.filter((e: any) => e.status === "Confirmed").length,
+          value:
+            d.renewedEvents ??
+            events.filter((e: any) => e.status === "Confirmed").length,
           icon: "won",
           tone: "mint",
           note: "Confirmed events",
@@ -127,7 +146,15 @@ export default function Worklists({
         },
       ];
   const tabs = renewal
-    ? ["All", "Today", "Next 7 Days", "Next 30 Days", "Overdue", "Renewed"]
+    ? [
+        "All",
+        "Today",
+        "Next 7 Days",
+        "Next 30 Days",
+        "Overdue",
+        "Renewed",
+        "Cancelled",
+      ]
     : [
         "All",
         "Overdue",
@@ -158,9 +185,9 @@ export default function Worklists({
               onChange={(v) => change("range", v)}
             />
             <div className="filters">
-              <SearchInput
+              <DebouncedSearch
                 value={params.get("q") || ""}
-                onChange={(v) => change("q", v)}
+                onCommit={(v) => change("q", v, true)}
                 placeholder={
                   renewal
                     ? "Search by client name, policy number..."
@@ -229,22 +256,22 @@ export default function Worklists({
                 Reset
               </button>
             </div>
-            {renewal && (params.has("from") || params.has("to")) && (
+            {(params.has("from") || params.has("to")) && (
               <div className="filter-details">
                 <label>
                   From
-                  <input
-                    type="date"
+                  <DateField
+                    required
                     value={params.get("from") || ""}
-                    onChange={(e) => change("from", e.target.value)}
+                    onChange={(v) => v && change("from", v)}
                   />
                 </label>
                 <label>
                   Through
-                  <input
-                    type="date"
+                  <DateField
+                    required
                     value={params.get("to") || ""}
-                    onChange={(e) => change("to", e.target.value)}
+                    onChange={(v) => v && change("to", v)}
                   />
                 </label>
               </div>
@@ -254,7 +281,14 @@ export default function Worklists({
             ) : q.error ? (
               <ErrorState error={q.error} />
             ) : (
-              <>
+              <InfiniteScroll
+                hasMore={q.hasMore}
+                loadingMore={q.loadingMore}
+                onLoadMore={q.loadMore}
+                shown={q.data.data.length}
+                total={q.data.meta.total}
+                noun={renewal ? "renewals" : "follow-ups"}
+              >
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -332,6 +366,12 @@ export default function Worklists({
                                   <small title="Amount semantics">
                                     {r.amountMeaning}
                                   </small>
+                                  {r.status === "Pending" &&
+                                    r.outstandingMinor !== r.amountMinor && (
+                                      <small className="muted">
+                                        {rupees(r.outstandingMinor)} outstanding
+                                      </small>
+                                    )}
                                 </td>
                               </>
                             ) : (
@@ -386,13 +426,7 @@ export default function Worklists({
                   </table>
                 </div>
                 {!q.data.data.length && <Empty />}
-                <Pagination
-                  total={q.data.meta.total}
-                  page={page}
-                  limit={limit}
-                  onChange={(n) => change("page", String(n))}
-                />
-              </>
+              </InfiniteScroll>
             )}
           </Panel>
         </div>

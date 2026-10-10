@@ -17,6 +17,8 @@ if (config.NODE_ENV === "production")
   );
 // PostgreSQL DATE has no timezone; avoid the driver interpreting it as local midnight.
 pg.types.setTypeParser(1082, (value) => new Date(value + "T00:00:00.000Z"));
+// TIMESTAMP WITHOUT TIME ZONE columns hold UTC; the driver would otherwise read them in this machine's zone.
+pg.types.setTypeParser(1114, (value) => new Date(value.replace(" ", "T") + "Z"));
 const source = new pg.Client({
   connectionString: process.env.LEGACY_POSTGRES_URL,
 });

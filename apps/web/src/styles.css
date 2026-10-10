@@ -5011,6 +5011,7 @@ select.role-select {
 .client-combobox-options {
   max-height: 280px;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px;
 }
 
@@ -5054,7 +5055,22 @@ select.role-select {
   color: var(--color-heading);
 }
 
+.client-combobox-load-more {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .client-combobox-option-meta {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -5235,4 +5251,45 @@ html.dark .auth-redesign .auth-card form > .auth-submit:hover { background: #efd
 }
 @media (max-width: 700px) {
   .auth-theme-bottom { position: fixed; inset: auto 8px 8px auto; margin: 0; }
+}
+
+/* WhatsApp broadcast: client picker and send result. */
+.broadcast-list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin: 8px 0 12px;
+}
+.broadcast-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+.broadcast-row:last-child {
+  border-bottom: 0;
+}
+.broadcast-row > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.broadcast-row small {
+  color: var(--color-subtle);
+  font-size: 12px;
+}
+.broadcast-result {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.broadcast-result ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--color-subtle);
 }

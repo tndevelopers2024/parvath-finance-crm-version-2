@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Building2,
-  ChevronDown,
-  Package,
-  RefreshCw,
-} from "lucide-react";
+import { Building2, ChevronDown, Package, RefreshCw } from "lucide-react";
 import { useData, query } from "./api";
-import { Loading, ErrorState, SearchInput, useAuth } from "./components";
+import {
+  InfiniteScroll,
+  Loading,
+  ErrorState,
+  SearchInput,
+  useAuth,
+} from "./components";
 import CatalogueActions from "./CatalogueActions";
 
 export default function CatalogueWorkspace({
@@ -26,7 +27,6 @@ export default function CatalogueWorkspace({
   const [providerId, setProviderId] = useState("");
   const [sort, setSort] = useState("name");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const queries = [plans, providers, summary];
   if (queries.some((q) => q.isPending)) return <Loading />;
   const failed = queries.find((q) => q.error);
@@ -39,9 +39,11 @@ export default function CatalogueWorkspace({
         }}
       />
     );
-  const allPlans = plans.data.data;
+  const allPlans: any[] = plans.data?.data || [];
+  const providerList: any[] = providers.data?.data || [];
+  const productTotals: any[] = summary.data?.products || [];
   const totals = (id: string) =>
-    summary.data.products.find((p: any) => p.definitionId === id) || {
+    productTotals.find((p: any) => p.definitionId === id) || {
       records: 0,
       active: 0,
       applications: 0,
@@ -61,7 +63,7 @@ export default function CatalogueWorkspace({
   const rows = (
     mode === "products"
       ? matching
-      : providers.data.data.filter(
+      : providerList.filter(
           (p: any) =>
             (!category ||
               allPlans.some(
@@ -82,10 +84,9 @@ export default function CatalogueWorkspace({
           a.name.localeCompare(b.name)
         : a.name.localeCompare(b.name),
     );
-  const currentPage = Math.min(page, Math.max(1, Math.ceil(rows.length / 10)));
   const admin = user.role === "Administrator";
   const count = (key: string) =>
-    summary.data.products.reduce((n: number, p: any) => n + p[key], 0);
+    productTotals.reduce((n: number, p: any) => n + p[key], 0);
   const refresh = () => {
     queries.forEach((q) => {
       void q.refetch();
@@ -149,11 +150,7 @@ export default function CatalogueWorkspace({
       <div className="catalogue-metrics">
         {[
           ["Product plans", allPlans.length, "Across all categories"],
-          [
-            "Providers",
-            providers.data.data.length,
-            "Companies in your catalogue",
-          ],
+          ["Providers", providerList.length, "Companies in your catalogue"],
           [
             "Active policies / accounts",
             count("active"),
@@ -194,7 +191,6 @@ export default function CatalogueWorkspace({
             value={search}
             onChange={(v) => {
               setSearch(v);
-              setPage(1);
             }}
             placeholder="Search plans or providers…"
           />
@@ -203,7 +199,6 @@ export default function CatalogueWorkspace({
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
-              setPage(1);
             }}
           >
             <option value="">All categories</option>
@@ -217,11 +212,10 @@ export default function CatalogueWorkspace({
               value={providerId}
               onChange={(e) => {
                 setProviderId(e.target.value);
-                setPage(1);
               }}
             >
               <option value="">All providers</option>
-              {providers.data.data.map((p: any) => (
+              {providerList.map((p: any) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -233,7 +227,6 @@ export default function CatalogueWorkspace({
             value={sort}
             onChange={(e) => {
               setSort(e.target.value);
-              setPage(1);
             }}
           >
             <option value="name">Name A–Z</option>
@@ -242,29 +235,35 @@ export default function CatalogueWorkspace({
             </option>
           </select>
         </div>
-        {!rows.length ? (
-          <div className="catalogue-empty">
-            <Package size={28} />
-            <h3>No {mode === "products" ? "plans" : "providers"} found</h3>
-            <p>Try another search or clear your filters.</p>
-            <button
-              className="button"
-              onClick={() => {
-                setSearch("");
-                setCategory("");
-                setProviderId("");
-              }}
-            >
-              Clear filters
-            </button>
-          </div>
-        ) : mode === "products" ? (
-          planTable(rows.slice((currentPage - 1) * 10, currentPage * 10))
-        ) : (
-          <div>
-            {rows
-              .slice((currentPage - 1) * 10, currentPage * 10)
-              .map((p: any) => {
+        <InfiniteScroll
+          hasMore={false}
+          loadingMore={false}
+          onLoadMore={() => undefined}
+          shown={rows.length}
+          total={rows.length}
+          noun={mode === "products" ? "plans" : "providers"}
+        >
+          {!rows.length ? (
+            <div className="catalogue-empty">
+              <Package size={28} />
+              <h3>No {mode === "products" ? "plans" : "providers"} found</h3>
+              <p>Try another search or clear your filters.</p>
+              <button
+                className="button"
+                onClick={() => {
+                  setSearch("");
+                  setCategory("");
+                  setProviderId("");
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : mode === "products" ? (
+            planTable(rows)
+          ) : (
+            <div>
+              {rows.map((p: any) => {
                 const children = allPlans.filter(
                   (plan: any) =>
                     plan.providerId === p.id &&
@@ -336,32 +335,9 @@ export default function CatalogueWorkspace({
                   </article>
                 );
               })}
-          </div>
-        )}
-        <div className="catalogue-footer">
-          <span>
-            {rows.length
-              ? `${(currentPage - 1) * 10 + 1}–${Math.min(currentPage * 10, rows.length)} of ${rows.length}`
-              : "0 results"}{" "}
-            {mode === "products" ? "plans" : "providers"}
-          </span>
-          <div>
-            <button
-              className="button"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-            >
-              Previous
-            </button>
-            <button
-              className="button"
-              disabled={currentPage * 10 >= rows.length}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </div>
+            </div>
+          )}
+        </InfiniteScroll>
       </section>
     </div>
   );

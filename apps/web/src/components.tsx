@@ -42,7 +42,8 @@ import {
   CalendarPlus,
   type LucideIcon,
 } from "lucide-react";
-import { date, initials, query, useData, useWrite } from "./api";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { api, date, initials, query, useData, useWrite } from "./api";
 import Skeleton, { type SkeletonLayout } from "./Skeleton";
 
 export const icons: Record<string, LucideIcon> = {
@@ -221,7 +222,11 @@ export function Metrics({
           key={m.label}
           title={m.tooltip || m.note}
         >
-          {showIcons && <span className="summary-category-icon" aria-hidden="true"><Icon name={m.icon} size={18} /></span>}
+          {showIcons && (
+            <span className="summary-category-icon" aria-hidden="true">
+              <Icon name={m.icon} size={18} />
+            </span>
+          )}
           <div className="metric-body">
             <div className="metric-label">{m.label}</div>
             <strong>
@@ -282,16 +287,73 @@ export function SearchInput({
     </label>
   );
 }
+export const pageSizes = [10, 25, 50, 100];
+// Page sizes come from the URL, so anything not on the list falls back to the page's default.
+export const pageSizeFrom = (raw: string | null, fallback: number) =>
+  pageSizes.includes(Number(raw)) ? Number(raw) : fallback;
+// A scrolling list: the container has a fixed height and loads the next page when the
+// user nears its bottom, so the page itself does not grow with the number of rows.
+export function InfiniteScroll({
+  children,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+  shown,
+  total,
+  noun,
+}: {
+  children: ReactNode;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
+  shown: number;
+  total: number;
+  noun: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  // A short list never overflows, so it would never scroll: fill it straight away.
+  useEffect(() => {
+    const el = ref.current;
+    if (el && hasMore && !loadingMore && el.scrollHeight <= el.clientHeight + 4)
+      onLoadMore();
+  }, [shown, hasMore, loadingMore, onLoadMore]);
+  return (
+    <div
+      ref={ref}
+      className="infinite-scroll"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        if (
+          hasMore &&
+          !loadingMore &&
+          el.scrollHeight - el.scrollTop - el.clientHeight < 240
+        )
+          onLoadMore();
+      }}
+    >
+      {children}
+      <div className="infinite-footer" role="status">
+        {loadingMore
+          ? "Loading more…"
+          : hasMore
+            ? `Showing ${shown} of ${total} ${noun}. Scroll down for more.`
+            : `Showing all ${total} ${noun}`}
+      </div>
+    </div>
+  );
+}
 export function Pagination({
   total,
   page,
   limit,
   onChange,
+  onLimitChange,
 }: {
   total: number;
   page: number;
   limit: number;
   onChange: (n: number) => void;
+  onLimitChange?: (n: number) => void;
 }) {
   const pages = Math.max(1, Math.ceil(total / limit));
   const start = Math.max(1, Math.min(page - 2, pages - 4));
@@ -305,6 +367,23 @@ export function Pagination({
         Showing {total ? (page - 1) * limit + 1 : 0} -{" "}
         {Math.min(page * limit, total)} of {total} records
       </span>
+      {onLimitChange && (
+        <label className="pagination-size">
+          Rows per page
+          <select
+            value={limit}
+            onChange={(e) => onLimitChange(Number(e.target.value))}
+          >
+            {[...new Set([...pageSizes, limit])]
+              .sort((a, b) => a - b)
+              .map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
       <div>
         <button
           aria-label="Previous page"
@@ -315,29 +394,32 @@ export function Pagination({
         </button>
         {start > 1 && (
           <>
-            <button aria-label="Page 1" onClick={() => onChange(1)}>1</button>
+            <button aria-label="Page 1" onClick={() => onChange(1)}>
+              1
+            </button>
             {start > 2 && <span aria-hidden="true">…</span>}
           </>
         )}
-        {visiblePages.map(
-          (n) => (
-            <button
-              key={n}
-              className={page === n ? "primary" : ""}
-              aria-label={`Page ${n}`}
-              aria-current={page === n ? "page" : undefined}
-              onClick={() => onChange(n)}
-            >
-              {n}
-            </button>
-          ),
-        )}
+        {visiblePages.map((n) => (
+          <button
+            key={n}
+            className={page === n ? "primary" : ""}
+            aria-label={`Page ${n}`}
+            aria-current={page === n ? "page" : undefined}
+            onClick={() => onChange(n)}
+          >
+            {n}
+          </button>
+        ))}
         {visiblePages[visiblePages.length - 1] < pages && (
           <>
             {visiblePages[visiblePages.length - 1] < pages - 1 && (
               <span aria-hidden="true">…</span>
             )}
-            <button aria-label={`Page ${pages}`} onClick={() => onChange(pages)}>
+            <button
+              aria-label={`Page ${pages}`}
+              onClick={() => onChange(pages)}
+            >
               {pages}
             </button>
           </>
@@ -465,7 +547,13 @@ export function Calendar({
         ))}
         {Array.from({ length: days }, (_, i) => {
           const d = `${y}-${String(m + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
-          const tones = [...new Set(markers.filter((marker) => marker.date === d).map((marker) => marker.tone))];
+          const tones = [
+            ...new Set(
+              markers
+                .filter((marker) => marker.date === d)
+                .map((marker) => marker.tone),
+            ),
+          ];
           return (
             <button
               key={d}
@@ -473,14 +561,31 @@ export function Calendar({
               aria-label={
                 date(d) +
                 (tones.length
-                  ? " · " + tones.map((tone) => ({ rose: "overdue", amber: "scheduled", mint: "completed", lavender: "birthday" })[tone] || "activity").join(", ")
+                  ? " · " +
+                    tones
+                      .map(
+                        (tone) =>
+                          ({
+                            rose: "overdue",
+                            amber: "scheduled",
+                            mint: "completed",
+                            lavender: "birthday",
+                          })[tone] || "activity",
+                      )
+                      .join(", ")
                   : "")
               }
               aria-pressed={d === selected}
               onClick={() => onSelect(d)}
             >
               {i + 1}
-              {tones.length > 0 && <span className="date-markers" aria-hidden="true">{tones.map((tone) => <i key={tone} className={"date-marker " + tone} />)}</span>}
+              {tones.length > 0 && (
+                <span className="date-markers" aria-hidden="true">
+                  {tones.map((tone) => (
+                    <i key={tone} className={"date-marker " + tone} />
+                  ))}
+                </span>
+              )}
             </button>
           );
         })}
@@ -495,7 +600,7 @@ const quickItems: [string, LucideIcon, string, string][] = [
   ["Create Reminder", CalendarPlus, "/followups/new", "rose"],
   ["Upload Document", Upload, "/clients?upload=1", "blue"],
   ["View Renewals", CalendarDays, "/renewals", "amber"],
-  ["Prepare Message", Send, "/engagement/new", "lavender"],
+  ["Single message", Send, "/engagement/new", "lavender"],
   ["View Reports", ChartNoAxesColumnIncreasing, "/reports", "mint"],
 ];
 export function QuickActions({
@@ -679,12 +784,44 @@ export function Back({
     </Link>
   );
 }
+// "children › 0 › dob" reads as "Children, row 1, date of birth"; ids and paise suffixes are dropped.
+export const describeField = (path: PropertyKey[]) => {
+  const text = path
+    .map((part) =>
+      typeof part === "number"
+        ? `row ${part + 1}`
+        : String(part)
+            .replace(/(?<=[a-z])(Id|Minor)$/, "")
+            .replace(/([a-z])([A-Z])/g, "$1 $2")
+            .toLowerCase()
+            .replace(/\bdob\b/, "date of birth")
+            .replace(/ at$/, " date and time"),
+    )
+    .join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+// A rejected save lists each value the server would not accept, since these forms have no per-field messages.
 export function FormError({ error }: { error: any }) {
-  return error ? (
+  if (!error) return null;
+  const fields = Object.entries<string[]>(
+    error.details?.fieldErrors || {},
+  ).filter(([, messages]) => messages?.length);
+  return (
     <div role="alert" className="form-error">
-      {error.message || String(error)}
+      {fields.length ? (
+        <>
+          <strong>Check these details and try again</strong>
+          {fields.map(([key, messages]) => (
+            <div key={key}>
+              {describeField([key])}: {messages[0]}
+            </div>
+          ))}
+        </>
+      ) : (
+        error.message || String(error)
+      )}
     </div>
-  ) : null;
+  );
 }
 export function Submit({
   busy,
@@ -747,17 +884,36 @@ export function ClientCombobox({
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  const clientsQuery = useData(
-    "/clients?" + query({ q: debouncedTerm, limit: 30 }),
-    open || !!value,
-  );
+  const pageSize = 100;
+  const clientsQuery = useInfiniteQuery<any, Error>({
+    queryKey: ["client-combobox", debouncedTerm],
+    queryFn: ({ pageParam }) =>
+      api(
+        "/clients?" +
+          query({
+            q: debouncedTerm,
+            sort: "name",
+            direction: "asc",
+            limit: pageSize,
+            page: pageParam,
+          }),
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last: any) =>
+      last?.meta && last.meta.page * last.meta.limit < last.meta.total
+        ? last.meta.page + 1
+        : undefined,
+    enabled: open || !!value,
+  });
 
   const singleClientQuery = useData(
     "/clients/" + value,
     !!value && !initialClient,
   );
 
-  const rawClients: ClientItem[] = clientsQuery.data?.data || [];
+  const rawClients: ClientItem[] = (clientsQuery.data?.pages || []).flatMap(
+    (page: any) => page?.data || [],
+  );
   const listClients = rawClients.filter(
     (c) => !excludeId || c.id !== excludeId,
   );
@@ -981,9 +1137,7 @@ export function ClientCombobox({
             }}
           />
           <div className="client-combobox-input-actions">
-            {clientsQuery.isPending && (
-              <Loading layout="inline" />
-            )}
+            {clientsQuery.isPending && <Loading layout="inline" />}
             {searchTerm && (
               <button
                 type="button"
@@ -1037,8 +1191,21 @@ export function ClientCombobox({
           role="listbox"
           className="client-combobox-dropdown"
         >
-          {clientsQuery.isPending ? <Loading /> : filteredClients.length > 0 ? (
-            <div className="client-combobox-options">
+          {clientsQuery.isPending ? (
+            <Loading />
+          ) : filteredClients.length > 0 ? (
+            <div
+              className="client-combobox-options"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 80 &&
+                  clientsQuery.hasNextPage &&
+                  !clientsQuery.isFetchingNextPage
+                )
+                  clientsQuery.fetchNextPage();
+              }}
+            >
               {filteredClients.map((c, idx) => {
                 const isSelected = c.id === value;
                 const isHighlighted = idx === highlightedIndex;
@@ -1087,6 +1254,18 @@ export function ClientCombobox({
                   </div>
                 );
               })}
+              {clientsQuery.hasNextPage && (
+                <button
+                  type="button"
+                  className="client-combobox-load-more"
+                  disabled={clientsQuery.isFetchingNextPage}
+                  onClick={() => clientsQuery.fetchNextPage()}
+                >
+                  {clientsQuery.isFetchingNextPage
+                    ? "Loading…"
+                    : "Load more clients"}
+                </button>
+              )}
             </div>
           ) : (
             <div className="client-combobox-empty">

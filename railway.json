@@ -4,7 +4,10 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
+    "preDeployCommand": [
+      "node dist/apps/api/src/persistence/migrate.js"
+    ],
     "startCommand": "npm start",
-    "healthcheckPath": "/api/health"
+    "healthcheckPath": "/api/ready"
   }
 }

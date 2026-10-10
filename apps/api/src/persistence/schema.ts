@@ -1195,6 +1195,13 @@ export const schema: Record<ModelName, ModelSchema> = {
         },
         unique: false,
       },
+      {
+        keys: {
+          organizationId: 1,
+          createdAt: 1,
+        },
+        unique: false,
+      },
     ],
     compound: {},
   },
@@ -1355,6 +1362,14 @@ export const schema: Record<ModelName, ModelSchema> = {
           organizationId: 1,
           dueDate: 1,
           status: 1,
+        },
+        unique: false,
+      },
+      {
+        keys: {
+          organizationId: 1,
+          status: 1,
+          dueDate: 1,
         },
         unique: false,
       },
@@ -1530,6 +1545,13 @@ export const schema: Record<ModelName, ModelSchema> = {
         keys: {
           organizationId: 1,
           state: 1,
+          dueAt: 1,
+        },
+        unique: false,
+      },
+      {
+        keys: {
+          organizationId: 1,
           dueAt: 1,
         },
         unique: false,

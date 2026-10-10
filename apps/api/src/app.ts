@@ -11,6 +11,7 @@ import { rateLimit } from "express-rate-limit";
 import { ZodError } from "zod";
 import { config } from "./config.js";
 import { db, mongoClient } from "./db.js";
+import { schemaFingerprint } from "./persistence/migrate.js";
 import { auth } from "./auth.js";
 import { clients } from "./clients.js";
 import { workflows } from "./workflows.js";
@@ -45,11 +46,9 @@ export const isAllowedOrigin = (origin?: string, host?: string): boolean => {
   }
   return (
     origin === config.APP_ORIGIN ||
+    config.ALLOWED_ORIGINS.includes(origin) ||
     origin === `https://${host}` ||
-    origin === `http://${host}` ||
-    origin === "https://parvath-finance-crm-production.up.railway.app" ||
-    origin.endsWith(".railway.app") ||
-    origin.endsWith(".vercel.app")
+    origin === `http://${host}`
   );
 };
 
@@ -107,6 +106,14 @@ app.get("/api/ready", async (_req, res) => {
       .findOne({ _id: "001-mongodb" }))
   )
     throw new HttpError(503, "Database setup is incomplete; run db:migrate");
+  const current = await db.native
+    .collection<any>("schemaVersions")
+    .findOne({ _id: "current" });
+  if (current?.fingerprint !== schemaFingerprint)
+    throw new HttpError(
+      503,
+      "Database schema does not match this build; run db:migrate",
+    );
   res.json({ data: { status: "ready", database: "mongodb" } });
 });
 app.use("/api", (_req, res, next) => {
@@ -198,17 +205,27 @@ app.use(
                 ? 422
                 : err.code === "LIMIT_FILE_SIZE"
                   ? 413
-                  : 500;
+                  : err.name === "MulterError"
+                    ? 400
+                    : // body-parser and the URL decoder set a 4xx status on malformed input
+                      Number.isInteger(err.status) &&
+                        err.status >= 400 &&
+                        err.status < 500
+                      ? err.status
+                      : 500;
     const message =
       err instanceof ZodError
-        ? "Please correct the highlighted fields"
+        ? "Some details need correcting. Check them and try again."
         : status === 409 && !(err instanceof HttpError)
           ? "Record conflict. Refresh and retry."
-          : status === 413
+          : status === 413 && err.code === "LIMIT_FILE_SIZE"
             ? "File exceeds the 10 MB limit"
             : status === 500
               ? "An unexpected error occurred"
-              : err.message;
+              : err.name === "MulterError" ||
+                  (!(err instanceof HttpError) && Number.isInteger(err.status))
+                ? "The request could not be processed"
+                : err.message;
     if (status >= 500)
       logger.error(
         { requestId: req.requestId, errorType: err.name, code: err.code },

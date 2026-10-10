@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useState } from "react";
+import { StrictMode, Suspense, lazy, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BrowserRouter,
@@ -6,9 +6,10 @@ import {
   Outlet,
   Route,
   Routes,
+  useNavigate,
 } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useData } from "./api";
+import { onSessionEnded, useData } from "./api";
 import { AuthContext, ErrorState, Loading, ToastContext } from "./components";
 import Shell from "./Shell";
 const Dashboard = lazy(() => import("./Dashboard"));
@@ -43,6 +44,7 @@ import SmoothScroll from "./SmoothScroll";
 import "./styles.css";
 import "./workspace.css";
 import "./reference-layout.css";
+import "./forms.css";
 import "./summary-cards.css";
 import "./green-theme.css";
 const client = new QueryClient({
@@ -61,11 +63,29 @@ function Protected() {
     </AuthContext.Provider>
   );
 }
+const publicPaths = ["/login", "/signup", "/forgot-password", "/reset-password"];
 function App() {
   const [toast, setToast] = useState("");
+  const navigate = useNavigate();
+  useEffect(() => {
+    // Several queries get a 401 together when the session ends. The first one moves the
+    // address to /login, so the rest (and anything failing on the login page) stop here.
+    onSessionEnded(() => {
+      const { pathname, search, hash } = window.location;
+      if (publicPaths.includes(pathname.replace(/\/+$/, ""))) return;
+      navigate("/login?next=" + encodeURIComponent(pathname + search + hash), {
+        replace: true,
+      });
+      client.clear();
+    });
+    return () => onSessionEnded(() => {});
+  }, [navigate]);
+  const toastTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(toastTimer.current), []);
   const notify = (s: string) => {
     setToast(s);
-    window.setTimeout(() => setToast(""), 6000);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), 6000);
   };
   return (
     <ToastContext.Provider value={notify}>

@@ -4,7 +4,7 @@
 
 Copy `.env.example` and set required values. SESSION_SECRET must contain at least 32 random characters. MONGODB_URI and MONGODB_DB belong only on the server. Use an Atlas runtime identity restricted to the CRM database and a separate migration identity authorized for validators/indexes. Set TEST_MONGODB_URI/TEST_MONGODB_DB only for isolated tests; never point them at production. See [Atlas setup](mongodb-atlas.md).
 
-Production requires NODE_ENV=production, HTTPS APP_ORIGIN, no DEMO_DATE, private S3, an approved scanner, SMTP for account recovery and a real Atlas deployment supporting transactions. Keep Atlas network access restricted to the API/worker hosts or private endpoint. Trust only the configured reverse-proxy hop count; terminate HTTPS at the ingress. Keep object-store administration private.
+Production requires NODE_ENV=production, HTTPS APP_ORIGIN, no DEMO_DATE, private S3, an approved scanner, SMTP for account recovery and a real Atlas deployment supporting transactions. Keep Atlas network access restricted to the API/worker hosts or private endpoint. Browser origins are matched exactly: `APP_ORIGIN`, the API's own host, and any listed in `ALLOWED_ORIGINS`. A frontend on another domain that proxies `/api` (such as the Vercel rewrite in `apps/web/vercel.json`) must have its origin in one of those or every sign-in and save is rejected with "Origin is not allowed". Trust only the configured reverse-proxy hop count; terminate HTTPS at the ingress. Keep object-store administration private.
 
 Compose is **local development infrastructure**. The API and worker read MongoDB settings from `.env` and can use Atlas directly. The optional `local-db` profile starts MongoDB 8 and replica-set initialization; it is not production database configuration. Use APP_ORIGIN=http://localhost:8080 and NODE_ENV=development for the local web container. Resolve reviewed immutable image digests before a release.
 
@@ -33,7 +33,7 @@ The optional `pg` devDependency is used only by staging cutover/reconciliation s
 ## Health, logs and shutdown
 
 - `/api/health`: process liveness.
-- `/api/ready`: MongoDB ping and schema-version marker. It does not certify S3, scanning, SMTP or Atlas backup configuration.
+- `/api/ready`: MongoDB ping, schema-version marker, and a check that the schema fingerprint stored by the last `db:migrate` matches this build (503 until the migration has run). It does not certify S3, scanning, SMTP or Atlas backup configuration.
 - Startup refuses a standalone MongoDB server and logs a sanitized connection failure without the URI. Atlas connection failures require checking credentials, IP/private endpoint access and cluster availability.
 - Pino logs structured request IDs, method/path/status/duration; bodies, cookies, authorization values and query strings are not logged. The central error middleware is the integration point for monitoring with PII collection disabled.
 - Monitor failed/stale Job documents, growing quarantine, scan failures, database latency, connection pool pressure, login failures and backup age.
@@ -42,7 +42,7 @@ The optional `pg` devDependency is used only by staging cutover/reconciliation s
 
 ## Jobs, sessions and documents
 
-Run at least one worker. MongoDB atomically claims jobs; a five-minute server-time lease and token fence stale workers. Retries use exponential delay and fail after five attempts. Administrator Settings displays failures and allows retry. Notification IDs equal job IDs to prevent duplication after a crash. Event confirmation cancels obsolete reminders.
+Run at least one worker, either as its own process (`node dist/apps/api/src/worker.js`) or inside the API process with `INLINE_WORKER=1`. On Railway the repository config runs `persistence/migrate.js` before each deploy, checks `/api/ready`, and defaults `INLINE_WORKER` to 1 because only the API service is started; set `INLINE_WORKER=0` there if you add a dedicated worker service. Document scans still need `CLAMAV_HOST`; without it every upload stays quarantined. MongoDB atomically claims jobs; a five-minute server-time lease and token fence stale workers. Retries use exponential delay and fail after five attempts. Administrator Settings displays failures and allows retry. Notification IDs equal job IDs to prevent duplication after a crash. Event confirmation cancels obsolete reminders.
 
 With a fixed demo clock, future business reminders do not become due until DEMO_DATE advances or is removed. Session expiry and job lease time use real time. Session TTL deletion is eventual; the store still rejects an expired session immediately. Password changes/reset revoke the affected stored sessions. Do not manually delete session indexes.
 

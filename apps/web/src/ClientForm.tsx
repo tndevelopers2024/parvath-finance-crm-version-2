@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Link,
@@ -9,7 +9,6 @@ import {
 } from "react-router-dom";
 import {
   Briefcase,
-  CalendarDays,
   ChevronRight,
   Mail,
   Phone,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import {
   clientSchema,
+  onboardingProfileSchema,
   type ClientInput,
 } from "../../../packages/contracts/src/index";
 import { api, query, useData, useWrite } from "./api";
@@ -27,6 +27,7 @@ import {
   Avatar,
   Back,
   FormError,
+  describeField,
   Loading,
   Modal,
   PageHeading,
@@ -40,8 +41,10 @@ import {
   FinancialProfile,
   Preferences,
   ReviewSummary,
+  cleanProfile,
   type OnboardingProfile,
 } from "./ClientOnboardingSections";
+import DateField from "./DateField";
 const steps = [
   "Basic Information",
   "Additional Details",
@@ -49,6 +52,30 @@ const steps = [
   "Preferences",
   "Review",
 ];
+// Label and owning step for each value the client schema can reject; no step means the form has no control for it.
+const fieldInfo: Record<string, [string, number?]> = {
+  name: ["Name", 0],
+  phone: ["Phone number", 0],
+  email: ["Email address", 0],
+  kind: ["Client type", 0],
+  dob: ["Date of birth", 0],
+  gender: ["Gender", 0],
+  occupation: ["Occupation", 0],
+  registrationNumber: ["Registration number", 0],
+  industry: ["Industry", 0],
+  address: ["Residential address", 1],
+  city: ["City", 1],
+  state: ["State", 1],
+  source: ["Source", 1],
+  annualIncome: ["Annual income range", 2],
+  riskProfile: ["Risk profile", 2],
+  preferredContact: ["Preferred contact method", 3],
+  onboardingProfile: ["Additional details"],
+  duplicateReason: ["Reason for shared contact details"],
+  notesText: ["Notes"],
+  tags: ["Tags"],
+  version: ["Record version"],
+};
 export function NewClientPopup() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -100,6 +127,7 @@ export default function ClientForm({
     [photo, setPhoto] = useState<File>(),
     [duplicate, setDuplicate] = useState(false),
     [duplicateReason, setDuplicateReason] = useState(""),
+    [reasonMissing, setReasonMissing] = useState(false),
     [recovered, setRecovered] = useState(false),
     [profile, setProfile] = useState<OnboardingProfile>({
       sameAddress: true,
@@ -107,6 +135,8 @@ export default function ClientForm({
     });
   const bodyRef = useRef<HTMLDivElement>(null);
   const [stepNotice, setStepNotice] = useState("");
+  const [otherIssues, setOtherIssues] = useState<string[]>([]),
+    [checkFollowup, setCheckFollowup] = useState(false);
   useEffect(() => setStepNotice(""), [step]);
   const [sectionIndex, setSectionIndex] = useState(0);
   const [sectionTitles, setSectionTitles] = useState<string[]>([]);
@@ -134,6 +164,7 @@ export default function ClientForm({
   const photoInput = useRef<HTMLInputElement>(null);
   const form = useForm<ClientInput>({
     resolver: zodResolver(clientSchema) as any,
+    mode: "onTouched",
     defaultValues: {
       name: "",
       phone: "",
@@ -155,6 +186,17 @@ export default function ClientForm({
     setValue,
   } = form;
   const kind = watch("kind");
+  // A field that is showing an error is checked again as it is edited, so the message goes as soon as it is fixed.
+  useEffect(() => {
+    const s = watch((_, { name }) => {
+      if (name && form.getFieldState(name).error) void trigger(name);
+    });
+    return () => s.unsubscribe();
+  }, [watch, trigger, form]);
+  const errorCount = Object.keys(errors).length;
+  useEffect(() => {
+    if (!errorCount) setStepNotice("");
+  }, [errorCount]);
   useEffect(() => {
     if (existing.data) {
       const c = existing.data.data;
@@ -211,9 +253,46 @@ export default function ClientForm({
     );
     return () => s.unsubscribe();
   }, [watch, draftKey, id, profile]);
-  const submit = handleSubmit(async (values) => {
-    if (embedded && (step < 4 || sectionIndex < sectionTitles.length - 1)) {
+  const issuesNotice =
+    "Some details need correcting before this can be saved. See the list above the buttons.";
+  const save = async (values: ClientInput) => {
+    if (
+      !id &&
+      embedded &&
+      (step < 4 || sectionIndex < sectionTitles.length - 1)
+    ) {
       await next();
+      return;
+    }
+    setOtherIssues([]);
+    if (duplicate && duplicateReason.trim().length < 5) {
+      setReasonMissing(true);
+      return;
+    }
+    // The onboarding profile lives outside react-hook-form, so check it against the server's schema here.
+    const sent = cleanProfile(profile);
+    const checked = onboardingProfileSchema.safeParse(sent);
+    if (!checked.success) {
+      const followup = checked.error.issues.filter(
+        (issue) => issue.path[0] === "initialFollowup",
+      );
+      const rest = checked.error.issues.filter(
+        (issue) => issue.path[0] !== "initialFollowup",
+      );
+      if (followup.length) setCheckFollowup(true);
+      setOtherIssues([
+        ...(followup.length && id
+          ? [`Initial follow-up: ${followup[0].message}.`]
+          : []),
+        ...rest.map(
+          (issue) => `${describeField(issue.path)}: ${issue.message}`,
+        ),
+      ]);
+      setStepNotice(
+        followup.length && !id && !rest.length
+          ? "Add a date and notes for the follow-up, or untick it."
+          : issuesNotice,
+      );
       return;
     }
     try {
@@ -222,7 +301,7 @@ export default function ClientForm({
         method: id ? "PATCH" : "POST",
         body: {
           ...values,
-          onboardingProfile: profile,
+          onboardingProfile: sent,
           allowDuplicate: duplicate,
           duplicateReason,
         },
@@ -255,89 +334,81 @@ export default function ClientForm({
             : "/clients/" + result.data.id + "/success",
       );
     } catch (e) {
-      if ((e as any).status === 409 && Array.isArray((e as any).details))
+      const details = (e as any).details;
+      if ((e as any).status === 409 && Array.isArray(details))
         setDuplicate(true);
+      // Zod failures arrive flattened; put each on its field so it is listed on whichever step is open.
+      if ((e as any).status === 422 && details?.fieldErrors) {
+        const unknown: string[] = [...(details.formErrors || [])];
+        Object.entries<string[]>(details.fieldErrors).forEach(
+          ([key, messages]) => {
+            const message = messages?.[0] || "Check this value.";
+            if (fieldInfo[key])
+              form.setError(key as keyof ClientInput, {
+                type: "server",
+                message,
+              });
+            else unknown.push(`${describeField([key])}: ${message}`);
+          },
+        );
+        setOtherIssues(unknown);
+        if (!id && details.fieldErrors.onboardingProfile)
+          setCheckFollowup(true);
+        setStepNotice(issuesNotice);
+      }
     }
-  });
+  };
+  // The second handler runs when the form's own schema check fails, possibly on a step that is not open.
+  const submit = handleSubmit(save, () => setStepNotice(issuesNotice));
+  // The server requires only a name and a phone number (clientSchema); everything else on this step is checked for format when filled in.
   const validateSection = async () => {
     if (step === 0) {
       const values = form.getValues();
       const required: [keyof ClientInput, string][] = [
-        ["name", "Full name"],
+        ["name", kind === "Business" ? "Business name" : "Full name"],
         ["phone", "Phone number"],
-        ["email", "Email address"],
-        ...(kind === "Individual"
-          ? ([
-              ["dob", "Date of birth"],
-              ["gender", "Gender"],
-              ["occupation", "Occupation"],
-            ] as [keyof ClientInput, string][])
-          : ([
-              ["registrationNumber", "Registration number"],
-              ["industry", "Industry"],
-            ] as [keyof ClientInput, string][])),
       ];
       const missing = required.filter(
         ([key]) => !String(values[key] || "").trim(),
       );
-      if (!(profile.communicationChannels || []).length)
-        missing.push(["preferredContact", "Preferred contact method"]);
-      const valid = await trigger(required.map(([key]) => key));
+      const valid = await trigger(
+        [
+          "name",
+          "phone",
+          "email",
+          "dob",
+          "gender",
+          "occupation",
+          "registrationNumber",
+          "industry",
+        ],
+        { shouldFocus: true },
+      );
       if (missing.length) {
         missing.forEach(([key, label]) =>
           form.setError(key, {
             type: "required",
-            message: `${label} is required.`,
+            message: `Enter the ${label.toLowerCase()}.`,
           }),
         );
         setStepNotice(
-          `Please fill in ${missing.map(([, label]) => label.toLowerCase()).join(", ")} before continuing.`,
+          `Enter the ${missing.map(([, label]) => label.toLowerCase()).join(" and ")} to continue.`,
         );
         form.setFocus(missing[0][0]);
         return false;
       }
       if (!valid) {
-        setStepNotice(
-          "Please correct the highlighted information before continuing.",
-        );
-        return false;
-      }
-    } else if (step < 4 && embedded) {
-      const section =
-        bodyRef.current?.querySelectorAll<HTMLElement>(".onboard-section")[
-          sectionIndex
-        ];
-      const controls = Array.from(
-        section?.querySelectorAll<
-          HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-        >(
-          "input:not([type=hidden]):not([readonly]):not(:disabled), select:not(:disabled), textarea:not(:disabled)",
-        ) || [],
-      );
-      const optional =
-        section?.querySelector("h3")?.textContent === "Contact Restrictions";
-      if (
-        !optional &&
-        controls.length &&
-        !controls.some((control) =>
-          control instanceof HTMLInputElement &&
-          ["checkbox", "radio"].includes(control.type)
-            ? control.checked
-            : control.value.trim(),
-        )
-      ) {
-        setStepNotice(
-          `Fill in ${sectionTitles[sectionIndex]} before continuing.`,
-        );
-        controls[0].focus();
+        setStepNotice("Check the highlighted fields to continue.");
         return false;
       }
     }
     setStepNotice("");
     return true;
   };
+  // Editing moves freely between steps; the guided checks apply to new clients only.
   const next = async () => {
-    if (!(await validateSection())) return;
+    if (id) setStepNotice("");
+    else if (!(await validateSection())) return;
     if (embedded && sectionIndex < sectionTitles.length - 1) {
       setSectionIndex(sectionIndex + 1);
       return;
@@ -359,8 +430,6 @@ export default function ClientForm({
           <Phone size={18} />
         ) : name === "email" ? (
           <Mail size={18} />
-        ) : name === "dob" ? (
-          <CalendarDays size={18} />
         ) : (
           <Briefcase size={18} />
         )}
@@ -370,13 +439,36 @@ export default function ClientForm({
           {...register(name as any)}
           placeholder={placeholder}
           aria-invalid={!!errors[name]}
+          aria-describedby={errors[name] ? name + "-error" : undefined}
         />
       </span>
       {errors[name] && (
-        <small className="field-error">{String(errors[name]?.message)}</small>
+        <small className="field-error" id={name + "-error"}>
+          {String(errors[name]?.message)}
+        </small>
       )}
     </label>
   );
+  const inline =
+    step !== 0
+      ? []
+      : kind === "Business"
+        ? ["name", "phone", "email", "registrationNumber", "industry"]
+        : ["name", "phone", "email", "dob", "occupation"];
+  // Problems the open step does not already show beside a field.
+  const issues = Object.entries(errors)
+    .filter(([key]) => !inline.includes(key))
+    .map(([key, error]) => ({
+      key,
+      label: fieldInfo[key]?.[0] || key,
+      target: fieldInfo[key]?.[1],
+      message:
+        typeof error?.message === "string"
+          ? error.message
+          : "Check this value.",
+    }));
+  const lastScreen =
+    step === 4 && !(embedded && sectionIndex < sectionTitles.length - 1);
   if (id && existing.isPending) return <Loading layout="form" />;
   return (
     <div className="onboarding">
@@ -412,6 +504,9 @@ export default function ClientForm({
               setStepNotice("");
               setDuplicate(false);
               setDuplicateReason("");
+              setReasonMissing(false);
+              setOtherIssues([]);
+              setCheckFollowup(false);
               setRecovered(false);
               localStorage.removeItem(draftKey);
             }}
@@ -428,7 +523,9 @@ export default function ClientForm({
             type="button"
             aria-current={step === i ? "step" : undefined}
             onClick={() => {
-              if (i > step) {
+              if (id) {
+                setStep(i);
+              } else if (i > step) {
                 setStepNotice(
                   `Complete step ${step + 1}: ${steps[step]} first, then click Next.`,
                 );
@@ -447,7 +544,7 @@ export default function ClientForm({
           {stepNotice}
         </p>
       )}
-      <form onSubmit={submit}>
+      <form onSubmit={submit} noValidate>
         {embedded && sectionTitles.length > 1 && (
           <label className="popup-section-selector">
             Section {sectionIndex + 1} of {sectionTitles.length}
@@ -501,7 +598,7 @@ export default function ClientForm({
                   {field("phone", "Phone Number *", "+91 90000 00000", "tel")}
                   {field(
                     "email",
-                    "Email Address *",
+                    "Email Address",
                     "Enter email address",
                     "email",
                   )}
@@ -528,9 +625,30 @@ export default function ClientForm({
                   </fieldset>
                   {kind === "Individual" ? (
                     <>
-                      {field("dob", "Date of Birth *", "", "date")}
+                      <label className="field">
+                        Date of Birth
+                        <span className="input-with-icon">
+                          <Controller
+                            control={form.control}
+                            name="dob"
+                            render={({ field: dob }) => (
+                              <DateField
+                                aria-label="Date of Birth"
+                                value={dob.value || ""}
+                                onChange={dob.onChange}
+                                onBlur={dob.onBlur}
+                                inputRef={dob.ref}
+                                max={new Date(Date.now() + 19800000)
+                                  .toISOString()
+                                  .slice(0, 10)}
+                                error={errors.dob?.message}
+                              />
+                            )}
+                          />
+                        </span>
+                      </label>
                       <fieldset>
-                        <legend>Gender *</legend>
+                        <legend>Gender</legend>
                         <div className="choice-row">
                           {["Male", "Female", "Other"].map((g) => (
                             <label key={g}>
@@ -544,16 +662,16 @@ export default function ClientForm({
                           ))}
                         </div>
                       </fieldset>
-                      {field("occupation", "Occupation *", "Enter occupation")}
+                      {field("occupation", "Occupation", "Enter occupation")}
                     </>
                   ) : (
                     <>
                       {field(
                         "registrationNumber",
-                        "Registration Number *",
+                        "Registration Number",
                         "Company / GST registration",
                       )}
-                      {field("industry", "Industry *", "Enter industry")}
+                      {field("industry", "Industry", "Enter industry")}
                       <div className="muted">
                         Link existing contact people from the client profile
                         after saving.
@@ -561,7 +679,7 @@ export default function ClientForm({
                     </>
                   )}
                   <fieldset>
-                    <legend>Preferred Contact Method *</legend>
+                    <legend>Preferred Contact Method</legend>
                     <div className="choice-row">
                       {["WhatsApp", "Call", "Email"].map((m) => (
                         <label key={m}>
@@ -649,9 +767,34 @@ export default function ClientForm({
                   form={form}
                   goTo={setStep}
                   editing={!!id}
+                  checkFollowup={checkFollowup}
                 />
               )}
-              <FormError error={write.error} />
+              {!(write.error as any)?.details?.fieldErrors && (
+                <FormError error={write.error} />
+              )}
+              {(issues.length > 0 || otherIssues.length > 0) && (
+                <div role="alert" className="form-error">
+                  <strong>Correct these before saving</strong>
+                  {issues.map((issue) => (
+                    <div key={issue.key}>
+                      {issue.label}: {issue.message}{" "}
+                      {issue.target !== undefined && issue.target !== step && (
+                        <button
+                          type="button"
+                          className="text-link"
+                          onClick={() => setStep(issue.target!)}
+                        >
+                          Go to {steps[issue.target]}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {otherIssues.map((issue) => (
+                    <div key={issue}>{issue}</div>
+                  ))}
+                </div>
+              )}
               {duplicate && (
                 <div className="duplicate-warning">
                   <strong>Review possible duplicate</strong>
@@ -664,9 +807,16 @@ export default function ClientForm({
                     <input
                       value={duplicateReason}
                       onChange={(e) => setDuplicateReason(e.target.value)}
-                      required
-                      minLength={5}
+                      aria-invalid={
+                        reasonMissing && duplicateReason.trim().length < 5
+                      }
                     />
+                    {reasonMissing && duplicateReason.trim().length < 5 && (
+                      <small className="field-error">
+                        Add a short reason (at least 5 characters), for example
+                        “Spouse uses the same number”.
+                      </small>
+                    )}
                   </label>
                 </div>
               )}
@@ -697,20 +847,22 @@ export default function ClientForm({
                 Back
               </button>
             )}
-            {step < 4 ||
-            (embedded && sectionIndex < sectionTitles.length - 1) ? (
+            {!lastScreen && (
               <button
-                className="primary"
+                className={id ? undefined : "primary"}
                 type="button"
                 onClick={() => void next()}
               >
-                Next:{" "}
-                {embedded && sectionIndex < sectionTitles.length - 1
-                  ? sectionTitles[sectionIndex + 1]
-                  : steps[step + 1]}{" "}
+                {id
+                  ? "Next"
+                  : "Next: " +
+                    (embedded && sectionIndex < sectionTitles.length - 1
+                      ? sectionTitles[sectionIndex + 1]
+                      : steps[step + 1])}{" "}
                 <ChevronRight size={18} />
               </button>
-            ) : (
+            )}
+            {(id || lastScreen) && (
               <Submit busy={write.isPending}>
                 {id ? "Save Changes" : "Create Client"}
               </Submit>

@@ -6,21 +6,37 @@ import {
   followupSchema,
   productSchema,
   eventSchema,
+  eventUpdateSchema,
+  eventCancelSchema,
+  paymentReversalSchema,
+  businessDate,
   stages,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
-import { audit, HttpError, owned, permit, validOwner } from "./security.js";
+import {
+  audit,
+  holdClient,
+  HttpError,
+  owned,
+  permit,
+  validOwner,
+} from "./security.js";
 import {
   dateOnly,
+  datePlus,
   day,
   eventTiming,
   flattenClient,
   nextEventDate,
   now,
+  outstandingMinor,
+  paidMinor,
   rangeBounds,
+  recurrenceAnchor,
   timing,
   timestampBounds,
 } from "./domain.js";
+import { fromZonedTime } from "date-fns-tz";
 export const workflows = Router();
 const productInclude = {
   client: { include: { contact: true } },
@@ -43,16 +59,18 @@ workflows.get("/members", async (req, res) =>
       select: {
         id: true,
         role: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, name: true, email: true, active: true } },
       },
     }),
   }),
 );
+const memberRole = z.enum(["Administrator", "Adviser", "Operations"]);
 workflows.post("/members", permit("admin"), async (req, res) => {
   const v = z
     .object({
       name: z.string().trim().min(2).max(100),
       email: z.email().transform((s) => s.toLowerCase()),
+      // For now, new members can only be added as Administrators.
       role: z.literal("Administrator"),
       password: z.string().min(12).max(128),
     })
@@ -87,8 +105,11 @@ workflows.post("/members", permit("admin"), async (req, res) => {
   res.status(201).json({ data: u });
 });
 workflows.patch("/members/:id", permit("admin"), async (req, res) => {
-  const { role } = z
-    .object({ role: z.literal("Administrator") })
+  const v = z
+    .object({ role: memberRole.optional(), active: z.boolean().optional() })
+    .refine((x) => x.role !== undefined || x.active !== undefined, {
+      message: "Provide a role or an active state",
+    })
     .parse(req.body);
   const m = await db.membership.findFirst({
     where: {
@@ -98,10 +119,45 @@ workflows.patch("/members/:id", permit("admin"), async (req, res) => {
   });
   if (!m) throw new HttpError(404, "Membership not found");
   if (m.userId === req.auth.userId)
-    throw new HttpError(409, "You cannot change your own administrator role");
+    throw new HttpError(
+      409,
+      "You cannot change your own role or deactivate your own account",
+    );
   await db.transaction(async (tx) => {
-    await tx.membership.update({ where: { id: m.id }, data: { role } });
-    await audit(tx, req, "role", "Membership", m.id, "Workspace role updated");
+    if (v.role !== undefined && v.role !== m.role) {
+      await tx.membership.update({ where: { id: m.id }, data: { role: v.role } });
+      await audit(tx, req, "role", "Membership", m.id, "Workspace role updated");
+    }
+    if (v.active !== undefined) {
+      await tx.user.update({
+        where: { id: m.userId },
+        data: { active: v.active },
+      });
+      // A deactivated member must lose access immediately, not at cookie expiry.
+      if (!v.active)
+        await tx.native
+          .collection("sessions")
+          .deleteMany({ "session.userId": m.userId }, { session: tx.session });
+      await audit(
+        tx,
+        req,
+        v.active ? "reactivate" : "deactivate",
+        "Membership",
+        m.id,
+        v.active ? "Workspace member reactivated" : "Workspace member deactivated",
+      );
+    }
+    // Two administrators acting on each other at once must not leave the workspace without one.
+    if (
+      !(await tx.membership.count({
+        where: {
+          organizationId: req.auth.organizationId,
+          role: "Administrator",
+          user: { active: true },
+        },
+      }))
+    )
+      throw new HttpError(409, "A workspace needs at least one administrator");
   });
   res.json({ data: { success: true } });
 });
@@ -349,6 +405,7 @@ workflows.post("/leads", permit("edit"), async (req, res) => {
   await owned("client", v.clientId, req);
   await validOwner(v.ownerId, req);
   const row = await db.transaction(async (tx) => {
+    await holdClient(tx, v.clientId, req);
     const o = await tx.opportunity.create({
       data: {
         ...v,
@@ -401,7 +458,7 @@ workflows.patch("/leads/:id", permit("edit"), async (req, res) => {
     .omit({ clientId: true, stage: true })
     .extend({ version: z.number().int() })
     .parse(req.body);
-  await validOwner(v.ownerId, req);
+  await validOwner(v.ownerId, req, old.ownerId);
   if (["Won", "Lost"].includes(old.stage))
     throw new HttpError(409, "Reopen the opportunity before editing");
   const { version, ...data } = v;
@@ -461,6 +518,23 @@ workflows.post("/leads/:id/stage", permit("edit"), async (req, res) => {
     });
     if (!count.count)
       throw new HttpError(409, "Stage changed; refresh the board");
+    // A lost lead has nothing left to chase: close its pending follow-ups so they do not
+    // turn Overdue later and count against the client's health and attention lists.
+    if (v.stage === "Lost") {
+      await tx.followUp.updateMany({
+        where: { opportunityId: old.id, state: "pending" },
+        data: {
+          state: "cancelled",
+          outcome: "Not needed",
+          completedAt: now(),
+          version: { increment: 1 },
+        },
+      });
+      await tx.opportunity.updateMany({
+        where: { id: old.id },
+        data: { nextFollowUp: null },
+      });
+    }
     await tx.opportunityStageHistory.create({
       data: {
         opportunityId: old.id,
@@ -682,6 +756,7 @@ workflows.post("/products", permit("edit"), async (req, res) => {
   await owned("client", v.clientId, req);
   await owned("productDefinition", v.definitionId, req);
   const r = await db.transaction(async (tx) => {
+    await holdClient(tx, v.clientId, req);
     const p = await tx.clientProduct.create({
       data: {
         ...v,
@@ -722,23 +797,118 @@ workflows.patch("/products/:id", permit("edit"), async (req, res) => {
     .extend({ version: z.number().int() })
     .parse(req.body);
   const { version, ...data } = v;
-  const r = await db.clientProduct.updateMany({
-    where: { id: old.id, version },
-    data: {
-      ...data,
-      startDate: dateOnly(data.startDate),
-      premiumMinor: data.premiumMinor ? BigInt(data.premiumMinor) : undefined,
-      principalMinor: data.principalMinor
-        ? BigInt(data.principalMinor)
-        : undefined,
-      expectedCommissionMinor: BigInt(data.expectedCommissionMinor),
-      version: { increment: 1 },
-    },
+  const closed = await db.transaction(async (tx) => {
+    const r = await tx.clientProduct.updateMany({
+      where: { id: old.id, version },
+      data: {
+        ...data,
+        startDate: dateOnly(data.startDate),
+        premiumMinor: data.premiumMinor ? BigInt(data.premiumMinor) : undefined,
+        principalMinor: data.principalMinor
+          ? BigInt(data.principalMinor)
+          : undefined,
+        expectedCommissionMinor: BigInt(data.expectedCommissionMinor),
+        version: { increment: 1 },
+      },
+    });
+    if (!r.count)
+      throw new HttpError(409, "Product changed; refresh before saving");
+    const counts = { cancelledEvents: 0, keptEvents: 0 };
+    if (data.status !== "Closed") return counts;
+    // A closed product has nothing further to collect. Events holding a
+    // part-payment stay pending so the money already received is resolved by hand.
+    // Payments that were all reversed net to zero and hold nothing.
+    const pending = await tx.financialEvent.findMany({
+      where: { productId: old.id, status: "Pending" },
+      include: { payments: true },
+    });
+    for (const e of pending)
+      if (
+        paidMinor(e) === 0n &&
+        (await cancelEvent(tx, req, e, "Product closed"))
+      )
+        counts.cancelledEvents++;
+      else counts.keptEvents++;
+    return counts;
   });
-  if (!r.count)
-    throw new HttpError(409, "Product changed; refresh before saving");
-  res.json({ data: { success: true } });
+  res.json({ data: { success: true, ...closed } });
 });
+const cancelledSummary = "Financial event cancelled: ";
+const cancelReminders = (tx: typeof db, organizationId: string, id: string) =>
+  tx.job.updateMany({
+    where: {
+      organizationId,
+      key: { startsWith: `event-${id}-` },
+      state: { in: ["pending", "processing"] },
+    },
+    data: { state: "cancelled" },
+  });
+// The reason lives in the activity row: FinancialEvent has a strict validator
+// with every field required, so no stored field is added for it.
+async function cancelEvent(
+  tx: typeof db,
+  req: Parameters<typeof audit>[1],
+  e: { id: string; version: number },
+  reason: string,
+) {
+  const change = await tx.financialEvent.updateMany({
+    where: { id: e.id, version: e.version, status: "Pending" },
+    data: { status: "Cancelled", version: { increment: 1 } },
+  });
+  if (!change.count) return false;
+  await cancelReminders(tx, req.auth.organizationId, e.id);
+  await audit(
+    tx,
+    req,
+    "cancel",
+    "FinancialEvent",
+    e.id,
+    cancelledSummary + reason,
+  );
+  return true;
+}
+const inr = (minor: bigint) =>
+  "₹" +
+  (minor / 100n).toLocaleString("en-IN") +
+  (minor % 100n ? "." + String(minor % 100n).padStart(2, "0") : "");
+const dateClash = (clash: { status: string }, type: string, dueDate: string) =>
+  new HttpError(
+    409,
+    clash.status === "Cancelled"
+      ? `A cancelled ${type} event already exists for this product on ${dueDate}. Choose a different date.`
+      : `A ${type} event already exists for this product on ${dueDate}`,
+  );
+// A reversal is its own payment row: negative amount, reference derived from
+// the original so the unique (eventId, reference) key allows only one.
+const reversalPrefix = "Reversal of ";
+// Optional inclusive calendar-day window; either end may be given alone.
+const dayWindow = (q: unknown) => {
+  const d = z
+    .object({ from: businessDate.optional(), to: businessDate.optional() })
+    .parse(q);
+  if (d.from && d.to && d.from > d.to)
+    throw new HttpError(400, "End date must follow start date");
+  return d;
+};
+// Tightens bounds already set by the range filter instead of replacing them.
+const narrow = (
+  bounds: { gte?: Date; lt?: Date } = {},
+  gte?: Date,
+  lt?: Date,
+) => ({
+  ...bounds,
+  ...(gte && (!bounds.gte || gte > bounds.gte) ? { gte } : {}),
+  ...(lt && (!bounds.lt || lt < bounds.lt) ? { lt } : {}),
+});
+const withOutstanding = <
+  T extends {
+    status: string;
+    amountMinor: bigint;
+    payments: { amountMinor: bigint }[];
+  },
+>(
+  e: T,
+) => ({ ...e, paidMinor: paidMinor(e), outstandingMinor: outstandingMinor(e) });
 workflows.get("/renewals", async (req, res) => {
   const p = safePage(req.query);
   const range = z.string().optional().parse(req.query.range) || "All";
@@ -748,21 +918,19 @@ workflows.get("/renewals", async (req, res) => {
     ...(date ? { dueDate: date } : {}),
     ...(range === "Renewed"
       ? { status: "Confirmed" }
-      : range === "All"
-        ? {}
-        : { status: { not: "Confirmed" } }),
+      : range === "Cancelled"
+        ? { status: "Cancelled" }
+        : range === "All"
+          ? {}
+          : { status: "Pending" }),
   };
-  if (req.query.from || req.query.to) {
-    const d = z
-      .object({
-        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      })
-      .parse(req.query);
-    if (d.from > d.to)
-      throw new HttpError(400, "End date must follow start date");
-    where.dueDate = { gte: dateOnly(d.from), lte: dateOnly(d.to) };
-  }
+  const d = dayWindow(req.query);
+  if (d.from || d.to)
+    where.dueDate = narrow(
+      where.dueDate,
+      d.from ? dateOnly(d.from) : undefined,
+      d.to ? dateOnly(datePlus(d.to, 1)) : undefined,
+    );
   if (req.query.type)
     where.type = z
       .enum([
@@ -797,7 +965,7 @@ workflows.get("/renewals", async (req, res) => {
   });
   res.json({
     data: rows.map((r) => ({
-      ...r,
+      ...withOutstanding(r),
       client: flattenClient(r.client),
       timing: eventTiming(r, req.auth.timezone),
     })),
@@ -807,6 +975,11 @@ workflows.get("/renewals", async (req, res) => {
 workflows.post("/renewals", permit("edit"), async (req, res) => {
   const v = eventSchema.parse(req.body);
   const p = await owned("clientProduct", v.productId, req);
+  if (p.status === "Closed")
+    throw new HttpError(
+      400,
+      "This product is closed; events cannot be scheduled on a closed product",
+    );
   const definition = await db.productDefinition.findUniqueOrThrow({
     where: { id: p.definitionId },
   });
@@ -830,16 +1003,24 @@ workflows.post("/renewals", permit("edit"), async (req, res) => {
   }[v.type];
   if (v.type === "Loan review" && v.amountMinor !== "0")
     throw new HttpError(400, "A loan review has no payment amount");
+  // A cancelled event keeps its (product, type, dueDate) key, so name the clash.
+  const clash = await db.financialEvent.findFirst({
+    where: { productId: p.id, type: v.type, dueDate: dateOnly(v.dueDate) },
+  });
+  if (clash) throw dateClash(clash, v.type, v.dueDate);
   res.status(201).json({
-    data: await db.financialEvent.create({
-      data: {
-        ...v,
-        amountMinor: BigInt(v.amountMinor),
-        dueDate: dateOnly(v.dueDate),
-        organizationId: req.auth.organizationId,
-        clientId: p.clientId,
-        amountMeaning: meaning,
-      },
+    data: await db.transaction(async (tx) => {
+      await holdClient(tx, p.clientId, req);
+      return tx.financialEvent.create({
+        data: {
+          ...v,
+          amountMinor: BigInt(v.amountMinor),
+          dueDate: dateOnly(v.dueDate),
+          organizationId: req.auth.organizationId,
+          clientId: p.clientId,
+          amountMeaning: meaning,
+        },
+      });
     }),
   });
 });
@@ -858,13 +1039,153 @@ workflows.get("/renewals/:id", async (req, res) => {
       payments: true,
     },
   });
+  const cancelled =
+    r.status === "Cancelled"
+      ? await db.activity.findFirst({
+          where: {
+            organizationId: req.auth.organizationId,
+            entityType: "FinancialEvent",
+            entityId: r.id,
+            action: "cancel",
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : null;
   res.json({
     data: {
-      ...r,
+      ...withOutstanding(r),
       client: flattenClient(r.client),
       timing: eventTiming(r, req.auth.timezone),
+      cancelReason: cancelled?.summary.startsWith(cancelledSummary)
+        ? cancelled.summary.slice(cancelledSummary.length)
+        : undefined,
+      cancelledAt: cancelled?.createdAt,
     },
   });
+});
+workflows.patch("/renewals/:id", permit("edit"), async (req, res) => {
+  const old = await owned("financialEvent", String(req.params.id), req);
+  const v = eventUpdateSchema.parse(req.body);
+  const dueDate = v.dueDate === undefined ? undefined : dateOnly(v.dueDate);
+  const amountMinor =
+    v.amountMinor === undefined ? undefined : BigInt(v.amountMinor);
+  const result = await db
+    .transaction(async (tx) => {
+      const e = await tx.financialEvent.findUniqueOrThrow({
+        where: { id: old.id },
+        include: { payments: true },
+      });
+      if (e.status !== "Pending")
+        throw new HttpError(
+          400,
+          `Only a pending event can be corrected; this event is ${e.status.toLowerCase()}`,
+        );
+      const changes: string[] = [];
+      if (amountMinor !== undefined && amountMinor !== e.amountMinor) {
+        if (e.type === "Loan review" && amountMinor !== 0n)
+          throw new HttpError(400, "A loan review has no payment amount");
+        const paid = paidMinor(e);
+        if (amountMinor < paid)
+          throw new HttpError(
+            400,
+            `Amount cannot be reduced below the ${inr(paid)} already recorded as paid`,
+          );
+        changes.push(`amount ${inr(e.amountMinor)} to ${inr(amountMinor)}`);
+      }
+      const moved =
+        dueDate !== undefined && dueDate.getTime() !== e.dueDate.getTime();
+      if (moved) {
+        const clash = await tx.financialEvent.findFirst({
+          where: {
+            productId: e.productId,
+            type: e.type,
+            dueDate,
+            id: { not: e.id },
+          },
+        });
+        if (clash) throw dateClash(clash, e.type, v.dueDate!);
+        changes.push(
+          `due date ${e.dueDate.toISOString().slice(0, 10)} to ${v.dueDate}`,
+        );
+      }
+      if (
+        v.recurrenceMonths !== undefined &&
+        v.recurrenceMonths !== e.recurrenceMonths
+      )
+        changes.push(
+          `recurrence ${e.recurrenceMonths ? e.recurrenceMonths + " months" : "one-time"} to ${v.recurrenceMonths ? v.recurrenceMonths + " months" : "one-time"}`,
+        );
+      const change = await tx.financialEvent.updateMany({
+        where: { id: e.id, version: v.version, status: "Pending" },
+        data: changes.length
+          ? {
+              dueDate: moved ? dueDate : undefined,
+              amountMinor,
+              recurrenceMonths: v.recurrenceMonths,
+              version: { increment: 1 },
+            }
+          : {},
+      });
+      if (!change.count)
+        throw new HttpError(409, "Event changed; refresh before correcting");
+      // Reminders were timed against the old due date, so they are retired
+      // exactly as confirmation retires them; the user schedules new ones.
+      const remindersCancelled = moved
+        ? (await cancelReminders(tx, req.auth.organizationId, e.id)).count
+        : 0;
+      if (changes.length)
+        await audit(
+          tx,
+          req,
+          "update",
+          "FinancialEvent",
+          e.id,
+          "Financial event corrected: " + changes.join("; "),
+        );
+      return {
+        event: await tx.financialEvent.findUnique({ where: { id: e.id } }),
+        remindersCancelled,
+      };
+    })
+    .catch((err) => {
+      // Lost a race for the same (product, type, dueDate) key.
+      if (err?.code === 11000 && v.dueDate)
+        throw dateClash({ status: "Pending" }, old.type, v.dueDate);
+      throw err;
+    });
+  res.json({
+    data: result.event,
+    meta: { remindersCancelled: result.remindersCancelled },
+  });
+});
+workflows.post("/renewals/:id/cancel", permit("edit"), async (req, res) => {
+  const old = await owned("financialEvent", String(req.params.id), req);
+  const v = eventCancelSchema.parse(req.body);
+  const result = await db.transaction(async (tx) => {
+    const e = await tx.financialEvent.findUniqueOrThrow({
+      where: { id: old.id },
+      include: { payments: true },
+    });
+    if (e.status === "Cancelled") return old;
+    if (e.status !== "Pending")
+      throw new HttpError(
+        400,
+        "Only a pending event can be cancelled; this event is confirmed",
+      );
+    // Reversed payments net to zero, so nothing is held against the event.
+    if (paidMinor(e) !== 0n)
+      throw new HttpError(
+        400,
+        "This event has recorded payments and cannot be cancelled; reverse them first",
+      );
+    // No next recurrence is created: a cancelled event ends its own series.
+    if (
+      !(await cancelEvent(tx, req, { id: e.id, version: v.version }, v.reason))
+    )
+      throw new HttpError(409, "Event changed; refresh before cancelling");
+    return tx.financialEvent.findUnique({ where: { id: e.id } });
+  });
+  res.json({ data: result });
 });
 workflows.post("/renewals/:id/payment", permit("operate"), async (req, res) => {
   const e = await owned("financialEvent", String(req.params.id), req);
@@ -876,11 +1197,40 @@ workflows.post("/renewals/:id/payment", permit("operate"), async (req, res) => {
     .parse(req.body);
   if (e.type === "Loan review")
     throw new HttpError(400, "A review has no payment");
+  if (e.status === "Cancelled")
+    throw new HttpError(400, "This event is cancelled; no payment is due");
+  if (v.reference.startsWith(reversalPrefix))
+    throw new HttpError(
+      400,
+      `References starting with "${reversalPrefix.trim()}" are reserved for reversals`,
+    );
   const result = await db.transaction(async (tx) => {
     const existing = await tx.payment.findUnique({
       where: { eventId_reference: { eventId: e.id, reference: v.reference } },
     });
-    if (existing) return existing;
+    if (existing) {
+      if (
+        await tx.payment.findUnique({
+          where: {
+            eventId_reference: {
+              eventId: e.id,
+              reference: reversalPrefix + v.reference,
+            },
+          },
+        })
+      )
+        throw new HttpError(
+          409,
+          `A payment with reference ${v.reference} was recorded and reversed on this event; use a different reference`,
+        );
+      // Same reference and amount is a retry; a different amount is not.
+      if (existing.amountMinor !== BigInt(v.amountMinor))
+        throw new HttpError(
+          409,
+          `A payment with reference ${v.reference} already exists for a different amount (${inr(existing.amountMinor)}); reverse it or use a different reference`,
+        );
+      return existing;
+    }
     const lock = await tx.financialEvent.updateMany({
       where: { id: e.id, version: e.version, status: "Pending" },
       data: { version: { increment: 1 } },
@@ -922,6 +1272,61 @@ workflows.post("/renewals/:id/payment", permit("operate"), async (req, res) => {
   });
   res.json({ data: result });
 });
+// Payments are never edited or deleted: a wrong one is offset by a reversal
+// row, and the reason lives in the activity row (see cancelEvent).
+workflows.post(
+  "/renewals/:id/payments/:paymentId/reverse",
+  permit("edit"),
+  async (req, res) => {
+    const e = await owned("financialEvent", String(req.params.id), req);
+    const v = paymentReversalSchema.parse(req.body);
+    if (e.status !== "Pending")
+      throw new HttpError(
+        400,
+        `Payments can only be reversed on a pending event; this event is ${e.status.toLowerCase()}`,
+      );
+    const result = await db.transaction(async (tx) => {
+      const p = await tx.payment.findFirst({
+        where: { id: String(req.params.paymentId), eventId: e.id },
+      });
+      if (!p) throw new HttpError(404, "Payment not found");
+      if (p.amountMinor < 0n)
+        throw new HttpError(400, "A reversal cannot itself be reversed");
+      const reference = reversalPrefix + p.reference;
+      const existing = await tx.payment.findUnique({
+        where: { eventId_reference: { eventId: e.id, reference } },
+      });
+      if (existing) return existing;
+      const lock = await tx.financialEvent.updateMany({
+        where: { id: e.id, version: e.version, status: "Pending" },
+        data: { version: { increment: 1 } },
+      });
+      if (!lock.count)
+        throw new HttpError(
+          409,
+          "Event changed; refresh before reversing payment",
+        );
+      const reversal = await tx.payment.create({
+        data: {
+          eventId: e.id,
+          amountMinor: -p.amountMinor,
+          reference,
+          recordedBy: req.auth.userId,
+        },
+      });
+      await audit(
+        tx,
+        req,
+        "payment-reversal",
+        "FinancialEvent",
+        e.id,
+        `Payment ${p.reference} of ${inr(p.amountMinor)} reversed: ${v.reason}`,
+      );
+      return reversal;
+    });
+    res.json({ data: result });
+  },
+);
 workflows.post(
   "/renewals/:id/complete",
   permit("operate"),
@@ -934,10 +1339,12 @@ workflows.post(
         include: { payments: true },
       });
       if (e.status === "Confirmed") return e;
-      if (
-        e.type !== "Loan review" &&
-        e.payments.reduce((a, b) => a + b.amountMinor, 0n) < e.amountMinor
-      )
+      if (e.status === "Cancelled")
+        throw new HttpError(
+          400,
+          "This event is cancelled and cannot be confirmed",
+        );
+      if (e.type !== "Loan review" && paidMinor(e) < e.amountMinor)
         throw new HttpError(
           400,
           "Record the full payment or receipt before confirming",
@@ -952,8 +1359,33 @@ workflows.post(
       });
       if (!change.count)
         throw new HttpError(409, "Event changed; refresh before confirming");
-      if (e.recurrenceMonths) {
-        const dueDate = nextEventDate(e.dueDate, e.recurrenceMonths);
+      // A closed product schedules nothing further, so its series ends here.
+      if (
+        e.recurrenceMonths &&
+        (await tx.clientProduct.findUnique({ where: { id: e.productId } }))
+          ?.status !== "Closed"
+      ) {
+        // The series keeps the day-of-month of its first event, so a date
+        // clamped to a short month does not drift (31 Jan, 28 Feb, 31 Mar).
+        const series = await tx.financialEvent.findMany({
+          where: {
+            productId: e.productId,
+            type: e.type,
+            recurrenceMonths: e.recurrenceMonths,
+            status: { not: "Cancelled" },
+            dueDate: { lt: e.dueDate },
+          },
+          select: { dueDate: true },
+        });
+        const dueDate = nextEventDate(
+          recurrenceAnchor(
+            series.map((s) => s.dueDate),
+            e.dueDate,
+            e.recurrenceMonths,
+          ),
+          e.recurrenceMonths,
+          e.dueDate,
+        );
         await tx.financialEvent.upsert({
           where: {
             productId_type_dueDate: {
@@ -1004,6 +1436,8 @@ workflows.post(
     const e = await owned("financialEvent", String(req.params.id), req);
     if (e.status === "Confirmed")
       throw new HttpError(409, "This event is already confirmed");
+    if (e.status === "Cancelled")
+      throw new HttpError(409, "This event is cancelled");
     const { runAt } = z.object({ runAt: z.iso.datetime() }).parse(req.body);
     if (new Date(runAt) < now())
       throw new HttpError(400, "Choose a future reminder time");
@@ -1035,6 +1469,18 @@ workflows.get("/followups", async (req, res) => {
         ? { lt: now() }
         : timestampBounds(range, req.auth.timezone);
   }
+  // from/to are workspace calendar days matched against the dueAt instant.
+  const d = dayWindow(req.query);
+  if (d.from || d.to)
+    where.dueAt = narrow(
+      where.dueAt,
+      d.from
+        ? fromZonedTime(d.from + "T00:00:00", req.auth.timezone)
+        : undefined,
+      d.to
+        ? fromZonedTime(datePlus(d.to, 1) + "T00:00:00", req.auth.timezone)
+        : undefined,
+    );
   if (req.query.channel)
     where.channel = z
       .enum(["Call", "WhatsApp", "Email", "Meeting"])
@@ -1084,6 +1530,7 @@ workflows.post("/followups", permit("operate"), async (req, res) => {
     }
   }
   const f = await db.transaction(async (tx) => {
+    await holdClient(tx, v.clientId, req);
     const row = await tx.followUp.create({
       data: {
         ...v,
@@ -1127,7 +1574,7 @@ workflows.patch("/followups/:id", permit("operate"), async (req, res) => {
     .parse(req.body);
   if (f.state !== "pending")
     throw new HttpError(409, "Only pending follow-ups can be edited");
-  await validOwner(v.ownerId, req);
+  await validOwner(v.ownerId, req, f.ownerId);
   const { version, ...data } = v;
   const r = await db.transaction(async (tx) => {
     const change = await tx.followUp.updateMany({

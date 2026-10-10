@@ -19,14 +19,25 @@ const localDay = (value: string) =>
   new Date(value).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 export default function CalendarPage() {
   const agenda = useRef<HTMLDivElement>(null);
-  const q = useData("/dashboard");
   const [params, setParams] = useSearchParams();
+  // The dashboard only returns a bounded window of events, follow-ups and birthdays. Ask for the
+  // month on screen plus its neighbours so month navigation stays complete.
+  const picked = params.get("date") || "";
+  const windowQuery = /^\d{4}-\d{2}-\d{2}$/.test(picked)
+    ? `?from=${iso(new Date(+picked.slice(0, 4), +picked.slice(5, 7) - 2, 1))}&to=${iso(new Date(+picked.slice(0, 4), +picked.slice(5, 7) + 1, 1))}`
+    : "";
+  const q = useData("/dashboard" + windowQuery);
+  // Keep the previous month on screen while the next one loads instead of flashing the skeleton.
+  const shown = useRef<any>(null);
+  if (q.data) shown.current = q.data;
+  const payload = q.data ?? shown.current;
   const [filter, setFilter] = useState("All"),
     [search, setSearch] = useState(""),
     [view, setView] = useState("Month");
-  if (q.isPending) return <Loading layout="calendar" />;
-  if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
-  const d = q.data.data,
+  if (!payload && q.error)
+    return <ErrorState error={q.error} retry={q.refetch} />;
+  if (!payload) return <Loading layout="calendar" />;
+  const d = payload.data,
     selected = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "")
       ? params.get("date")!
       : d.today;
@@ -262,7 +273,9 @@ export default function CalendarPage() {
                       </div>
                       <Badge>{r.kind}</Badge>
                       <span>
-                        {r.amount != null ? rupees(r.amount) : r.status}
+                        {r.amount != null && !r.cancelled
+                          ? rupees(r.amount)
+                          : r.status}
                       </span>
                     </Link>
                   ))
@@ -304,27 +317,33 @@ export default function CalendarPage() {
             <h2>{date(selected)}</h2>
             <span>{selectedItems.length} activities</span>
           </div>
-          {selectedItems.length ? (
-            selectedItems.map((r) => (
-              <div className="calendar-agenda-row" key={r.id}>
-                <span className="calendar-agenda-time">{r.clock}</span>
-                <Avatar name={r.name} />
-                <div className="calendar-agenda-person">
-                  <Link to={"/clients/" + r.clientId}>
-                    <strong>{r.name}</strong>
+          <div className="calendar-agenda-list">
+            {selectedItems.length ? (
+              selectedItems.map((r) => (
+                <div className="calendar-agenda-row" key={r.id}>
+                  <span className="calendar-agenda-time">{r.clock}</span>
+                  <Avatar name={r.name} />
+                  <div className="calendar-agenda-person">
+                    <Link to={"/clients/" + r.clientId}>
+                      <strong>{r.name}</strong>
+                    </Link>
+                    <small>{r.details}</small>
+                  </div>
+                  <Badge>{r.kind}</Badge>
+                  <span>
+                    {r.amount != null && !r.cancelled
+                      ? rupees(r.amount)
+                      : r.status}
+                  </span>
+                  <Link className="button" to={r.href}>
+                    View details
                   </Link>
-                  <small>{r.details}</small>
                 </div>
-                <Badge>{r.kind}</Badge>
-                <span>{r.amount != null ? rupees(r.amount) : r.status}</span>
-                <Link className="button" to={r.href}>
-                  View details
-                </Link>
-              </div>
-            ))
-          ) : (
-            <Empty text="No activities for this date or these filters." />
-          )}
+              ))
+            ) : (
+              <Empty text="No activities for this date or these filters." />
+            )}
+          </div>
         </Panel>
       </div>
     </div>

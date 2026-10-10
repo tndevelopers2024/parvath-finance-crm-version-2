@@ -1,0 +1,266 @@
+/* Validation states and the day-first date field (DateField) shared by every form. */
+:root {
+  --color-danger: #c02d47;
+  --color-danger-soft: #fff0f1;
+  --color-danger-line: #f2d3db;
+}
+html.dark {
+  --color-danger: #ff9aa9;
+  --color-danger-soft: #3a2126;
+  --color-danger-line: #5c2f38;
+}
+.required,
+.field-error,
+html.dark .field-error {
+  color: var(--color-danger);
+}
+.field-error {
+  display: block;
+  font-weight: 500;
+}
+.form-error,
+html.dark .form-error {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: var(--color-danger-line);
+}
+.form-error > strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.form-error > div + div {
+  margin-top: 3px;
+}
+.form-error button.text-link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.app-shell.workspace-redesign .step-notice {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-block: 1px solid var(--color-danger-line);
+  font-weight: 500;
+}
+/* An invalid value outranks whatever border the surrounding layout gives the control. */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--color-danger) !important;
+}
+:is(input, select, textarea)[aria-invalid="true"]:focus-visible {
+  outline-color: var(--color-danger);
+}
+
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+.date-field.with-time {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(108px, 0.7fr);
+  gap: 5px 8px;
+}
+.date-field.with-time > .field-error {
+  grid-column: 1 / -1;
+}
+.date-field-control {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.date-field .date-field-control > input {
+  padding-right: 38px;
+}
+.date-field button.date-field-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+}
+.date-field button.date-field-toggle:hover:not(:disabled),
+.date-field button.date-field-toggle[aria-expanded="true"] {
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+}
+/* Beside other icon-led inputs the calendar button takes the leading icon's place. */
+.input-with-icon .date-field .date-field-control > input {
+  padding-right: 12px;
+}
+.input-with-icon .date-field button.date-field-toggle {
+  left: 6px;
+  right: auto;
+}
+.filter-details .date-field {
+  width: 150px;
+}
+
+.date-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 276px;
+  max-width: calc(100vw - 16px);
+  padding: 12px;
+  overflow: visible;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--ws-surface, #fff);
+  color: var(--color-ink);
+  box-shadow: 0 16px 40px #10261b33;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: default;
+}
+.date-popover-head {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1.25fr) minmax(0, 1fr) 30px;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.date-popover .date-popover-head select {
+  width: 100%;
+  height: 32px;
+  min-height: 0;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.date-popover button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+.date-popover button:hover:not(:disabled) {
+  background: var(--color-brand-soft);
+}
+.date-popover button:focus-visible {
+  outline-offset: -2px;
+}
+.date-popover-head button {
+  width: 30px;
+  height: 30px;
+}
+.date-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.date-popover-grid small {
+  padding: 4px 0;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+.date-popover-grid button,
+.date-popover-grid span {
+  width: 100%;
+  height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+.date-popover-grid button.today {
+  box-shadow: inset 0 0 0 1px var(--color-focus);
+  font-weight: 600;
+}
+.date-popover .date-popover-grid button.selected {
+  background: var(--color-brand);
+  color: var(--color-page);
+  font-weight: 600;
+}
+.date-popover-grid button:disabled {
+  opacity: 0.3;
+}
+.date-popover-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.date-popover .date-popover-foot button {
+  padding: 6px 10px;
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+/* Repeating rows (children, policies, loans…): columns share the width instead of spilling sideways. */
+.onboard-rows-head,
+.onboard-row {
+  grid-template-columns: repeat(var(--row-columns, 3), minmax(0, 1fr)) 44px;
+  min-width: calc(var(--row-columns, 3) * 116px + 44px);
+}
+.onboard-row {
+  align-items: start;
+}
+.onboard-cell {
+  min-width: 0;
+}
+.onboard-cell-label {
+  display: none;
+}
+.onboard-row .onboard-cell input {
+  width: 100%;
+  min-width: 0;
+}
+.onboard-row .date-field button.date-field-toggle {
+  width: 26px;
+  height: 26px;
+  right: 3px;
+}
+.onboard-row .date-field .date-field-control > input {
+  padding-right: 30px;
+}
+@media (max-width: 760px) {
+  .onboard-rows {
+    overflow-x: visible;
+  }
+  .onboard-rows-head {
+    display: none;
+  }
+  .onboard-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+  .onboard-cell-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--color-muted);
+  }
+  .onboard-row > button {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .onboard-cell:has(.date-field) {
+    grid-column: 1 / -1;
+  }
+  .date-field.with-time {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,5 +1,35 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 let csrf = "";
+let csrfRequest: Promise<string> | undefined;
+let sessionEnded = () => {};
+// The server has no error code for a CSRF rejection, so it is matched on 403 plus this exact message.
+const csrfRejected = "Security token expired. Refresh the page.";
+// A 401 from these is an answer about credentials, not a session that ended.
+const authPaths = [
+  "/auth/me",
+  "/auth/login",
+  "/auth/csrf",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+];
+export const onSessionEnded = (handler: () => void) => {
+  sessionEnded = handler;
+};
+export const forgetCsrf = () => {
+  csrf = "";
+};
+// Shared so concurrent writes without a session cookie do not each start their own session.
+const loadCsrf = () =>
+  (csrfRequest ||= fetch("/api/auth/csrf", { credentials: "include" })
+    .then(async (r) => (csrf = (await r.json()).data.csrf as string))
+    .finally(() => {
+      csrfRequest = undefined;
+    }));
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -11,30 +41,47 @@ export class ApiError extends Error {
 }
 export async function api(path: string, options: RequestInit = {}) {
   const method = options.method || "GET";
-  if (method !== "GET" && !csrf) {
-    const r = await fetch("/api/auth/csrf", { credentials: "include" });
-    csrf = (await r.json()).data.csrf;
+  const send = async () => {
+    if (method !== "GET" && !csrf) await loadCsrf();
+    const r = await fetch("/api" + path, {
+      ...options,
+      credentials: "include",
+      headers: {
+        ...(!(options.body instanceof FormData)
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
+        ...options.headers,
+      },
+    });
+    const raw = await r.text();
+    let result: any;
+    try {
+      result = JSON.parse(raw);
+    } catch {
+      result = undefined;
+    }
+    return { r, result };
+  };
+  let { r, result } = await send();
+  // The cached token belongs to a session that ended or was replaced in another tab: fetch a fresh one and retry once.
+  // String and FormData bodies can be sent again as they are.
+  if (
+    method !== "GET" &&
+    r.status === 403 &&
+    result?.error?.message === csrfRejected
+  ) {
+    csrf = "";
+    ({ r, result } = await send());
   }
-  const r = await fetch("/api" + path, {
-    ...options,
-    credentials: "include",
-    headers: {
-      ...(!(options.body instanceof FormData)
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...(method !== "GET" ? { "X-CSRF-Token": csrf } : {}),
-      ...options.headers,
-    },
-  });
-  const raw = await r.text();
-  let result: any;
-  try {
-    result = JSON.parse(raw);
-  } catch {
+  if (!result)
     throw new ApiError(
       "The server is temporarily unavailable. Please try again.",
       r.status || 503,
     );
+  if (r.status === 401 && !authPaths.some((p) => path.startsWith(p))) {
+    csrf = "";
+    sessionEnded();
   }
   if (!r.ok)
     throw new ApiError(
@@ -52,13 +99,57 @@ export const query = (params: Record<string, unknown>) => {
   });
   return p.toString();
 };
-export const useData = (path: string, enabled = true) =>
-  useQuery<any, ApiError>({
+export const useData = (path: string, enabled = true) => {
+  const q = useQuery<any, ApiError>({
     queryKey: [path],
     queryFn: () => api(path),
     enabled,
     retry: (n, e) => e.status >= 500 && n < 1,
   });
+  // A failed background refetch keeps the last good data; do not report it as an error
+  // so loaded pages (and unsaved forms) are not replaced by the error state.
+  return q.error && q.data !== undefined
+    ? { ...q, error: null, isError: false }
+    : q;
+};
+// Lists load in pages as the user scrolls. The result keeps the `data.data` and
+// `data.meta.total` shape of useData, so the rows render the same way.
+export const useInfiniteData = (path: string, limit = 50, enabled = true) => {
+  const q = useInfiniteQuery<any, ApiError>({
+    queryKey: [path, limit],
+    queryFn: ({ pageParam }) =>
+      api(
+        path +
+          (/[?&]$/.test(path) ? "" : path.includes("?") ? "&" : "?") +
+          query({ limit, page: pageParam }),
+      ),
+    initialPageParam: 1,
+    // Another page exists while fewer rows are loaded than the server's total.
+    getNextPageParam: (last: any, all: any[]) => {
+      const loaded = all.reduce((n, page) => n + (page?.data?.length || 0), 0);
+      const total = last?.meta?.total ?? 0;
+      return last?.data?.length && loaded < total ? all.length + 1 : undefined;
+    },
+    enabled,
+    retry: (n, e) => e.status >= 500 && n < 1,
+  });
+  const rows = (q.data?.pages || []).flatMap((page: any) => page?.data || []);
+  const total =
+    q.data?.pages?.[q.data.pages.length - 1]?.meta?.total ?? rows.length;
+  // Typed loosely on purpose, like useData: pages read rows and fields from it directly.
+  const data: any = q.data ? { data: rows, meta: { total } } : undefined;
+  return {
+    data,
+    isPending: q.isPending,
+    error: q.error,
+    refetch: q.refetch,
+    hasMore: !!q.hasNextPage,
+    loadingMore: q.isFetchingNextPage,
+    loadMore: () => {
+      void q.fetchNextPage();
+    },
+  };
+};
 export function useWrite() {
   const qc = useQueryClient();
   return useMutation({

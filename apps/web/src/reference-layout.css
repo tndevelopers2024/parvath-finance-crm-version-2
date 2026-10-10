@@ -287,6 +287,15 @@ html.dark .app-shell.workspace-redesign .greeting {
 }
 
 /* Clear page hierarchy and a product-first register. */
+/* The section label sits outside <nav>, straight under the logo block; give it room. */
+.app-shell.workspace-redesign .sidebar > .brand,
+.app-shell.workspace-redesign .sidebar > .nav-section-label {
+  flex-shrink: 0;
+}
+.app-shell.workspace-redesign .sidebar > .nav-section-label {
+  margin-top: 18px;
+  padding-top: 4px;
+}
 .app-shell.workspace-redesign .sidebar nav .nav-section-label {
   margin-top: 16px;
   padding-bottom: 6px;
@@ -2099,6 +2108,27 @@ input[type="reset"],
 .calendar-agenda-anchor {
   scroll-margin-top: 24px;
 }
+/* The day's activities scroll inside this panel, so the page itself stays put. */
+.calendar-agenda {
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 760px);
+  min-height: 0;
+}
+.calendar-agenda > .register-heading {
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ws-surface);
+  padding-bottom: 8px;
+}
+.calendar-agenda-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 
 /* Apple Calendar-inspired workspace: restrained chrome and category colors. */
 .apple-calendar .calendar-workspace {
@@ -3482,6 +3512,71 @@ input[type="reset"],
   }
 }
 
+/* Lead board: the stage columns sit side by side and the board scrolls left and right
+   with a trackpad, shift + wheel, or its scrollbar. */
+.app-shell.workspace-redesign .lead-board {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  padding-bottom: 14px;
+}
+.app-shell.workspace-redesign .lead-column {
+  scroll-snap-align: start;
+}
+.app-shell.workspace-redesign .lead-board-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ws-muted);
+}
+.app-shell.workspace-redesign .lead-board-nav > div {
+  display: flex;
+  gap: 8px;
+}
+.app-shell.workspace-redesign .lead-board-nav button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 50%;
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  cursor: pointer;
+}
+.app-shell.workspace-redesign .lead-board-nav button:hover {
+  background: var(--ws-selected);
+}
+/* Lead board: each stage column is as tall as the window allows, and its cards scroll
+   inside it, so the page itself does not grow with the number of leads. */
+.app-shell.workspace-redesign .lead-column {
+  display: flex;
+  flex-direction: column;
+  max-height: max(420px, calc(100dvh - 330px));
+  min-height: 0;
+}
+.app-shell.workspace-redesign .lead-column > header {
+  flex: 0 0 auto;
+}
+.app-shell.workspace-redesign .lead-column-cards:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+}
+.app-shell.workspace-redesign .lead-column-cards:not([hidden]) > * {
+  flex-shrink: 0;
+}
+
 /* Override the global important pill radius for theme cards. */
 .app-shell.workspace-redesign
   .settings-page
@@ -3552,4 +3647,44 @@ input[type="reset"],
     font-size: 11px;
     gap: 4px;
   }
+}
+
+/* Form action spacing: the submit button, error banner and action row never
+   sit flush against the field above them, in any dialog or page form. */
+.modal form > * + button[type="submit"],
+.modal form > * + .form-error,
+.modal form > * + .modal-actions,
+.modal form > .form-grid + *,
+.panel form > .form-grid + button[type="submit"],
+.panel form > .form-grid + .form-error {
+  margin-top: 20px;
+}
+.modal form > .form-error + button[type="submit"] {
+  margin-top: 0;
+}
+.modal form > button[type="submit"] {
+  align-self: flex-start;
+}
+
+/* Scrolling lists: the header row stays visible and the list grows inside its own box. */
+.infinite-scroll {
+  max-height: max(240px, calc(100dvh - 500px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: 8px;
+}
+.infinite-scroll > .table-scroll {
+  overflow: visible;
+}
+.infinite-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ws-surface);
+}
+.infinite-footer {
+  padding: 12px 4px;
+  font-size: 12px;
+  color: var(--ws-muted);
+  text-align: center;
 }

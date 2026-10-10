@@ -1,8 +1,10 @@
 import { db, mongoClient } from "../apps/api/src/db.js";
 import { now, day, dateOnly } from "../apps/api/src/domain.js";
+import { assertDemoDatabase } from "../apps/api/src/demoGuard.js";
 
 // Add demo records without replacing existing workspace data. Identifiers make reruns safe.
 async function main() {
+  assertDemoDatabase("Refreshing demo coverage");
   const membership = await db.membership.findFirst({
     where: { role: "Administrator" },
   });

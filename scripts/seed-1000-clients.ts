@@ -1,4 +1,8 @@
 import { db } from "../apps/api/src/db.js";
+import {
+  assertDemoDatabase,
+  clearWorkspaceData,
+} from "../apps/api/src/demoGuard.js";
 import { dateOnly } from "../apps/api/src/domain.js";
 
 // Deterministic PRNG to ensure reproducible, non-repetitive real-time distribution
@@ -25,6 +29,7 @@ async function main() {
   console.log(" Starting Real-Time Distributed 1,000 Client Workspace Seed");
   console.log("========================================================");
 
+  assertDemoDatabase("The 1,000 client seed");
   const m = await db.membership.findFirst({
     where: { role: "Administrator" },
     include: { user: true },
@@ -38,21 +43,7 @@ async function main() {
 
   // Clear previous records for fresh, clean seed
   console.log("Clearing previous client and activity records...");
-  await db.payment.deleteMany({ where: { event: { organizationId: org } } });
-  await db.financialEvent.deleteMany({ where: { organizationId: org } });
-  await db.clientProduct.deleteMany({ where: { organizationId: org } });
-  await db.opportunityStageHistory.deleteMany({});
-  await db.opportunity.deleteMany({ where: { organizationId: org } });
-  await db.followUp.deleteMany({ where: { organizationId: org } });
-  await db.communication.deleteMany({ where: { client: { organizationId: org } } });
-  await db.activity.deleteMany({ where: { organizationId: org } });
-  await db.note.deleteMany({ where: { client: { organizationId: org } } });
-  await db.contactRelationship.deleteMany({});
-  await db.clientTag.deleteMany({});
-  await db.client.deleteMany({ where: { organizationId: org } });
-  await db.contact.deleteMany({ where: { organizationId: org } });
-  await db.productDefinition.deleteMany({ where: { organizationId: org } });
-  await db.provider.deleteMany({ where: { organizationId: org } });
+  await clearWorkspaceData(org);
 
   // 1. Providers and Product Definitions (14 Providers, 22 Products)
   console.log("Registering financial providers and product catalogue...");

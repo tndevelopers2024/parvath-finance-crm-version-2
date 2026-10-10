@@ -5,8 +5,21 @@ import type { ClientInput } from "../../../packages/contracts/src/index";
 import { onboardingProfileSchema } from "../../../packages/contracts/src/index";
 import type { z } from "zod";
 import { Avatar } from "./components";
+import DateField from "./DateField";
+import { date as showDate } from "./api";
 
 export type OnboardingProfile = z.input<typeof onboardingProfileSchema>;
+// The follow-up Type select reports "Select" as an empty string, which the channel enum rejects; send it as undefined.
+export const cleanProfile = (profile: OnboardingProfile): OnboardingProfile =>
+  profile.initialFollowup
+    ? {
+        ...profile,
+        initialFollowup: {
+          ...profile.initialFollowup,
+          channel: profile.initialFollowup.channel || undefined,
+        },
+      }
+    : profile;
 type Props = {
   profile: OnboardingProfile;
   setProfile: (profile: OnboardingProfile) => void;
@@ -39,25 +52,46 @@ function Text({
   onChange,
   type = "text",
   placeholder = "",
+  error,
+  min,
+  max,
 }: {
   label: string;
   value?: string;
   onChange: (value: string) => void;
   type?: string;
   placeholder?: string;
+  error?: string;
+  min?: string;
+  max?: string;
 }) {
   return (
     <label className="onboard-field">
       {label}
-      <input
-        type={type}
-        value={value || ""}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {type === "date" ? (
+        <DateField
+          value={value || ""}
+          onChange={onChange}
+          error={error}
+          min={min}
+          max={max}
+        />
+      ) : (
+        <>
+          <input
+            type={type}
+            value={value || ""}
+            placeholder={placeholder}
+            aria-invalid={!!error}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {error && <small className="field-error">{error}</small>}
+        </>
+      )}
     </label>
   );
 }
+const today = () => new Date(Date.now() + 19800000).toISOString().slice(0, 10);
 
 function Choice({
   label,
@@ -121,7 +155,7 @@ function Rows({
   onChange,
   addLabel,
 }: {
-  columns: { key: string; label: string; type?: string }[];
+  columns: { key: string; label: string; type?: string; max?: string }[];
   rows: Row[];
   onChange: (rows: Row[]) => void;
   addLabel: string;
@@ -139,21 +173,37 @@ function Rows({
       </div>
       {rows.map((row, index) => (
         <div className="onboard-row" key={index}>
-          {columns.map((c) => (
-            <input
-              key={c.key}
-              aria-label={`${c.label} ${index + 1}`}
-              type={c.type || "text"}
-              value={row[c.key] || ""}
-              onChange={(e) =>
-                onChange(
-                  rows.map((item, i) =>
-                    i === index ? { ...item, [c.key]: e.target.value } : item,
-                  ),
-                )
-              }
-            />
-          ))}
+          {columns.map((c) => {
+            const put = (value: string) =>
+              onChange(
+                rows.map((item, i) =>
+                  i === index ? { ...item, [c.key]: value } : item,
+                ),
+              );
+            return (
+              // The caption shows only when rows stack on narrow screens; the header row labels them otherwise.
+              <div className="onboard-cell" key={c.key}>
+                <span className="onboard-cell-label" aria-hidden="true">
+                  {c.label}
+                </span>
+                {c.type === "date" ? (
+                  <DateField
+                    aria-label={`${c.label} ${index + 1}`}
+                    value={row[c.key] || ""}
+                    max={c.max}
+                    onChange={put}
+                  />
+                ) : (
+                  <input
+                    aria-label={`${c.label} ${index + 1}`}
+                    type={c.type || "text"}
+                    value={row[c.key] || ""}
+                    onChange={(e) => put(e.target.value)}
+                  />
+                )}
+              </div>
+            );
+          })}
           <button
             type="button"
             aria-label={`Remove ${addLabel} ${index + 1}`}
@@ -178,6 +228,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
   const put = (key: keyof OnboardingProfile, value: any) =>
     setProfile({ ...profile, [key]: value });
   const { register } = form;
+  const isSingle = profile.maritalStatus === "Single";
   return (
     <div className="onboard-sections two-columns">
       <div>
@@ -189,27 +240,32 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
               options={["Single", "Married", "Divorced", "Widowed"]}
               onChange={(v) => put("maritalStatus", v)}
             />
-            <Text
-              label="Spouse Name"
-              value={profile.spouseName}
-              onChange={(v) => put("spouseName", v)}
-            />
-            <Text
-              label="Spouse Date of Birth"
-              type="date"
-              value={profile.spouseDob}
-              onChange={(v) => put("spouseDob", v)}
-            />
-            <Text
-              label="Wedding Date"
-              type="date"
-              value={profile.weddingDate}
-              onChange={(v) => put("weddingDate", v)}
-            />
-            <label className="onboard-field">
-              No. of Children
-              <input value={profile.children?.length || 0} readOnly />
-            </label>
+            {!isSingle && (
+              <>
+                <Text
+                  label="Spouse Name"
+                  value={profile.spouseName}
+                  onChange={(v) => put("spouseName", v)}
+                />
+                <Text
+                  label="Spouse Date of Birth"
+                  type="date"
+                  max={today()}
+                  value={profile.spouseDob}
+                  onChange={(v) => put("spouseDob", v)}
+                />
+                <Text
+                  label="Wedding Date"
+                  type="date"
+                  value={profile.weddingDate}
+                  onChange={(v) => put("weddingDate", v)}
+                />
+                <label className="onboard-field">
+                  No. of Children
+                  <input value={profile.children?.length || 0} readOnly />
+                </label>
+              </>
+            )}
             <Text
               label="No. of Dependents"
               type="number"
@@ -217,17 +273,26 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
               onChange={(v) => put("dependents", v)}
             />
           </div>
-          <h4>Children Details</h4>
-          <Rows
-            columns={[
-              { key: "name", label: "Name" },
-              { key: "dob", label: "Date of Birth", type: "date" },
-              { key: "relationship", label: "Relationship" },
-            ]}
-            rows={profile.children || []}
-            onChange={(v) => put("children", v)}
-            addLabel="Add Another Child"
-          />
+          {!isSingle && (
+            <>
+              <h4>Children Details</h4>
+              <Rows
+                columns={[
+                  { key: "name", label: "Name" },
+                  {
+                    key: "dob",
+                    label: "Date of Birth",
+                    type: "date",
+                    max: today(),
+                  },
+                  { key: "relationship", label: "Relationship" },
+                ]}
+                rows={profile.children || []}
+                onChange={(v) => put("children", v)}
+                addLabel="Add Another Child"
+              />
+            </>
+          )}
         </Section>
         <Section title="Professional Information">
           <div className="onboard-fields two-columns">
@@ -321,6 +386,7 @@ export function AdditionalDetails({ profile, setProfile, form }: Props) {
             <Text
               label="Client Since"
               type="date"
+              max={today()}
               value={profile.clientSince}
               onChange={(v) => put("clientSince", v)}
             />
@@ -640,8 +706,25 @@ export function ReviewSummary({
   form,
   goTo,
   editing = false,
-}: Props & { goTo: (step: number) => void; editing?: boolean }) {
+  checkFollowup = false,
+}: Props & {
+  goTo: (step: number) => void;
+  editing?: boolean;
+  checkFollowup?: boolean;
+}) {
   const v = form.getValues();
+  // Same rule the server applies; the per-field text only says which half of it is unmet.
+  const followup = cleanProfile(profile).initialFollowup;
+  const followupIssue = checkFollowup
+    ? onboardingProfileSchema.shape.initialFollowup.safeParse(followup).error
+        ?.issues[0]?.message
+    : undefined;
+  const dateError =
+    followupIssue && !followup?.date ? "Choose a follow-up date." : undefined;
+  const notesError =
+    followupIssue && (followup?.notes || "").trim().length < 2
+      ? "Add a short note (at least 2 characters)."
+      : undefined;
   const group = (title: string, step: number, rows: [string, unknown][]) => (
     <Section
       title={title}
@@ -695,7 +778,7 @@ export function ReviewSummary({
       <div className="two-columns onboard-split">
         <div>
           {group("Personal Information", 0, [
-            ["Date of Birth", v.dob],
+            ["Date of Birth", v.dob ? showDate(v.dob) : undefined],
             ["Gender", v.gender],
             ["Occupation", v.occupation],
             ["Company", profile.companyName],
@@ -703,8 +786,15 @@ export function ReviewSummary({
           ])}
           {group("Family Information", 1, [
             ["Marital Status", profile.maritalStatus],
-            ["Spouse Name", profile.spouseName],
-            ["Children", profile.children?.length || 0],
+            ...(profile.maritalStatus === "Single"
+              ? []
+              : [
+                  ["Spouse Name", profile.spouseName] as [string, unknown],
+                  ["Children", profile.children?.length || 0] as [
+                    string,
+                    unknown,
+                  ],
+                ]),
             ["Dependents", profile.dependents],
           ])}
           {group("Address", 1, [
@@ -759,7 +849,9 @@ export function ReviewSummary({
                   <Text
                     label="Follow-up Date"
                     type="date"
+                    min={today()}
                     value={profile.initialFollowup.date}
+                    error={dateError}
                     onChange={(date) =>
                       setProfile({
                         ...profile,
@@ -776,8 +868,12 @@ export function ReviewSummary({
                         ...profile,
                         initialFollowup: {
                           ...profile.initialFollowup!,
-                          channel: channel as
-                            "Call" | "WhatsApp" | "Email" | "Meeting",
+                          channel: (channel || undefined) as
+                            | "Call"
+                            | "WhatsApp"
+                            | "Email"
+                            | "Meeting"
+                            | undefined,
                         },
                       })
                     }
@@ -785,6 +881,7 @@ export function ReviewSummary({
                   <Text
                     label="Notes"
                     value={profile.initialFollowup.notes}
+                    error={notesError}
                     onChange={(notes) =>
                       setProfile({
                         ...profile,
@@ -793,6 +890,11 @@ export function ReviewSummary({
                     }
                   />
                 </div>
+              )}
+              {followupIssue && !dateError && !notesError && (
+                <small className="field-error" role="alert">
+                  {followupIssue}
+                </small>
               )}
             </Section>
           )}

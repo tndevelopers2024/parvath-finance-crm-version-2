@@ -7,9 +7,18 @@ import { now } from "./domain.js";
 import { s3 } from "./documents.js";
 import pino from "pino";
 const log = pino({ level: config.NODE_ENV === "test" ? "silent" : "info" });
-let stopping = false;
 export async function runJob() {
   const leaseToken = randomUUID();
+  // A job that keeps killing the worker never reaches the catch block below, so its attempt cap
+  // is enforced here: an expired lease on a job already at the cap fails instead of being reclaimed.
+  await db.native.collection<any>("Job").updateMany(
+    {
+      state: "processing",
+      attempts: { $gte: 5 },
+      $expr: { $lt: ["$lockedAt", { $subtract: ["$$NOW", 5 * 60000] }] },
+    },
+    { $set: { state: "failed", lastError: "WORKER_LOST" } },
+  );
   const job = await db.native.collection<any>("Job").findOneAndUpdate(
     {
       $or: [
@@ -77,6 +86,7 @@ export async function runJob() {
       });
       const object = await s3.send(
         new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: doc.key }),
+        { abortSignal: AbortSignal.timeout(30000) },
       );
       const buffer = Buffer.from(await object.Body!.transformToByteArray());
       const clean = await new Promise<boolean>((resolve, reject) => {
@@ -93,11 +103,12 @@ export async function runJob() {
         socket.on("data", (b) => {
           response += b.toString();
         });
+        // An infected reply is "stream: <signature> FOUND"; a signature name may itself contain "OK".
         socket.on("end", () =>
-          response.includes("OK")
-            ? resolve(true)
-            : response.includes("FOUND")
-              ? resolve(false)
+          /\bFOUND\b/.test(response)
+            ? resolve(false)
+            : /^stream: OK\0?\s*$/.test(response)
+              ? resolve(true)
               : reject(new Error("SCAN_FAILED")),
         );
         socket.on("connect", () => {
@@ -140,19 +151,36 @@ export async function runJob() {
   }
   return true;
 }
+// Polls until the returned stop function is called; stop resolves once the current job has finished.
+export function startWorker() {
+  let stopping = false;
+  const done = (async () => {
+    while (!stopping) {
+      let worked = false;
+      try {
+        worked = await runJob();
+      } catch {
+        // A transient database error must not end the loop; wait and poll again.
+        log.warn("Job polling failed; retrying");
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      if (!worked && !stopping) await new Promise((r) => setTimeout(r, 1000));
+    }
+  })();
+  return () => {
+    stopping = true;
+    return done;
+  };
+}
 if (
   process.argv[1]?.endsWith("worker.ts") ||
   process.argv[1]?.endsWith("worker.js")
 ) {
-  process.on("SIGTERM", () => {
-    stopping = true;
-  });
-  process.on("SIGINT", () => {
-    stopping = true;
-  });
-  while (!stopping) {
-    const worked = await runJob();
-    if (!worked) await new Promise((r) => setTimeout(r, 1000));
-  }
-  await db.close();
+  const stop = startWorker();
+  const shutdown = async () => {
+    await stop();
+    await db.close();
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }

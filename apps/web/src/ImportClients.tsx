@@ -7,7 +7,25 @@ export default function ImportClients() {
   const write = useWrite(),
     [preview, setPreview] = useState<any>(),
     [result, setResult] = useState<any>(),
+    [state, setState] = useState(""),
     [error, setError] = useState("");
+  // Commits in server-side chunks: keeps calling until the job completes, or stops when a chunk fails
+  // (earlier chunks stay saved and the same button resumes without duplicating).
+  const commit = async () => {
+    setError("");
+    try {
+      for (;;) {
+        const r = await write.mutateAsync({
+          path: `/clients/import/${preview.id}/commit`,
+        });
+        setResult(r.data.result);
+        setState(r.data.state);
+        if (r.data.state !== "Partial") break;
+      }
+    } catch {
+      /* Error rendered below */
+    }
+  };
   return (
     <>
       <Back />
@@ -26,7 +44,9 @@ export default function ImportClients() {
       >
         <p>
           CSV columns: name, phone, email, kind, city, state, source. Name and
-          phone are required. kind must be Individual or Business. Maximum 500
+          phone are required (Indian mobiles start with 6-9). kind (default
+          Individual) must be Individual or Business; date of birth may be
+          YYYY-MM-DD or DD-MM-YYYY. Maximum 500
           rows / 1 MB. Duplicate contacts are skipped, never overwritten.
         </p>
         <label className="upload-zone">
@@ -37,9 +57,15 @@ export default function ImportClients() {
             type="file"
             accept=".csv,text/csv"
             onChange={async (e) => {
-              const f = e.target.files?.[0];
+              const input = e.target;
+              const f = input.files?.[0];
+              // Reset so choosing the same file name again (after fixing it) fires a change event.
+              const reset = () => {
+                input.value = "";
+              };
               if (!f) return;
-              if (!f.name.endsWith(".csv") || f.size > 1000000) {
+              if (!f.name.toLowerCase().endsWith(".csv") || f.size > 1000000) {
+                reset();
                 setError("Choose a CSV smaller than 1 MB");
                 return;
               }
@@ -51,15 +77,18 @@ export default function ImportClients() {
                 });
                 setPreview(r.data);
                 setResult(null);
+                setState("");
               } catch {
                 /* Error rendered below */
+              } finally {
+                reset();
               }
             }}
           />
         </label>
         <FormError error={error ? new Error(error) : write.error} />
       </Panel>
-      {preview && !result && (
+      {preview && state !== "Completed" && (
         <Panel
           title="2. Review import"
           action={
@@ -68,18 +97,23 @@ export default function ImportClients() {
               disabled={
                 write.isPending || !preview.rows.some((r: any) => !r.error)
               }
-              onClick={async () => {
-                const r = await write.mutateAsync({
-                  path: `/clients/import/${preview.id}/commit`,
-                });
-                setResult(r.data.result);
-              }}
+              onClick={commit}
             >
-              Import {preview.rows.filter((r: any) => !r.error).length} valid
-              rows
+              {state === "Failed" || state === "Partial"
+                ? "Resume import"
+                : `Import ${preview.rows.filter((r: any) => !r.error).length} valid rows`}
             </button>
           }
         >
+          {result && state !== "Completed" && (
+            <p className={state === "Failed" ? "field-error" : undefined}>
+              {state === "Failed"
+                ? `Import stopped after ${result.processed} of ${result.total} rows. ${result.created} clients were saved; resume to continue without duplicates. `
+                : `Importing: ${result.processed} of ${result.total} rows processed, ${result.created} clients added. `}
+              {result.skipped + result.failed > 0 &&
+                `${result.skipped + result.failed} rows skipped so far.`}
+            </p>
+          )}
           <div className="table-scroll">
             <table>
               <thead>
@@ -112,11 +146,12 @@ export default function ImportClients() {
           </div>
         </Panel>
       )}
-      {result && (
+      {result && state === "Completed" && (
         <Panel title="Import complete">
           <CheckCircle className="text-teal-700" size={40} />
           <h2>
-            {result.created} clients added · {result.skipped} rows skipped
+            {result.created} clients added · {result.skipped + (result.failed || 0)} rows
+            skipped
           </h2>
           {result.errors.map((e: any) => (
             <p key={e.row}>

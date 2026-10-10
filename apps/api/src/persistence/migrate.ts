@@ -1,5 +1,11 @@
+import { createHash } from "node:crypto";
 import { db } from "../db.js";
 import { schema } from "./schema.js";
+// Identifies the collection shape this build expects. Readiness compares it with the value the last
+// migration stored, so a deploy whose validators were not applied is reported instead of failing writes.
+export const schemaFingerprint = createHash("sha256")
+  .update(JSON.stringify(schema))
+  .digest("hex");
 
 // Additive and repeatable: never drops a collection, record, or existing index.
 export async function migrateDatabase() {
@@ -48,20 +54,30 @@ export async function migrateDatabase() {
         validationLevel: "strict",
         validationAction: "error",
       });
-    else
+    else {
+      // Backfill before tightening: a document missing a newly added nullable field would otherwise
+      // fail validation on its next update. A new non-nullable field still needs its own backfill.
+      const nullable = Object.entries(model.fields)
+        .filter(([, spec]) => spec.nullable)
+        .map(([field]) => field);
+      if (nullable.length)
+        await db.native.collection(model.collection).updateMany(
+          { $or: nullable.map((f) => ({ [f]: { $exists: false } })) },
+          [
+            {
+              $set: Object.fromEntries(
+                nullable.map((f) => [f, { $ifNull: [`$${f}`, null] }]),
+              ),
+            },
+          ],
+        );
       await db.native.command({
         collMod: model.collection,
         validator,
         validationLevel: "strict",
         validationAction: "error",
       });
-    if (model.collection === "Client" && existing.has("Client"))
-      await db.native
-        .collection("Client")
-        .updateMany(
-          { onboardingJson: { $exists: false } },
-          { $set: { onboardingJson: null } },
-        );
+    }
     const collection = db.native.collection(model.collection);
     await collection.createIndex(
       { id: 1 },
@@ -108,6 +124,13 @@ export async function migrateDatabase() {
     },
     { upsert: true },
   );
+  await db.native
+    .collection("schemaVersions")
+    .updateOne(
+      { _id: "current" as any },
+      { $set: { fingerprint: schemaFingerprint, appliedAt: new Date() } },
+      { upsert: true },
+    );
 }
 if (
   process.argv[1]?.endsWith("migrate.ts") ||

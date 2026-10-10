@@ -19,11 +19,11 @@ try {
     });
   });
   await page.goto(target + "/providers");
-  await page.getByRole("heading", { name: "LIC", exact: true }).waitFor();
+  await page.getByText("LIC", { exact: true }).first().waitFor();
   await page.getByRole("button", { name: "Add provider", exact: true }).click();
   await page.getByRole("dialog", { name: "Add provider" }).waitFor();
   await page.getByRole("button", { name: "Close dialog" }).click();
-  await page.getByRole("link", { name: "Add product", exact: true }).click();
+  await page.getByRole("link", { name: "Add plan", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Add product", exact: true })
     .waitFor();
@@ -37,9 +37,9 @@ try {
     "PASS separate provider management and product creation with existing provider",
   );
   await page.goto(target + "/products");
-  await page.getByRole("link", { name: /Life Insurance Life cover/ }).click();
+  await page.goto(target + "/products/category/Life%20Insurance");
   await page
-    .getByRole("heading", { name: "Client policies in this category" })
+    .getByRole("heading", { name: "Life Insurance", exact: true })
     .waitFor();
   await page
     .getByRole("link", { name: "Add client", exact: true })
@@ -192,7 +192,7 @@ try {
   await page.waitForURL("**/clients/client-0");
   await page.goto(target + "/clients");
   await page
-    .getByRole("checkbox", { name: "Select all clients on this page" })
+    .getByRole("checkbox", { name: "Select all loaded clients" })
     .check();
   await page.getByText("6 selected", { exact: false }).waitFor();
   await page
@@ -201,9 +201,6 @@ try {
   await page.getByRole("button", { name: "More Filters", exact: true }).click();
   await page.locator(".filter-details").waitFor();
   await page.goto(target + "/leads");
-  await page.getByRole("button", { name: "List", exact: true }).click();
-  await page.locator("table tbody tr").first().waitFor();
-  await page.getByRole("button", { name: "Kanban", exact: true }).click();
   await page.locator(".lead-board").waitFor();
   await page.goto(target + "/clients/new");
   await page.getByRole("button", { name: "Next: Additional Details" }).click();
@@ -221,7 +218,7 @@ try {
   await page.waitForURL("**/clients");
   await page.locator(".sidebar.open").waitFor({ state: "detached" });
   console.log(
-    "Search, sidebar pinning, tabs, selection, filters, lead views, validation, and mobile drawer passed",
+    "Search, sidebar pinning, tabs, selection, filters, lead board, validation, and mobile drawer passed",
   );
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 });
@@ -236,8 +233,12 @@ try {
         "Record payment / receipt",
       ],
       ["/settings", "Add Member", "Create Workspace Member"],
+      ["/products", "Add product", "Add product"],
+      ["/providers", "Add provider", "Add provider"],
     ]) {
       await page.goto(target + path);
+      if (path === "/settings")
+        await page.getByRole("button", { name: /^Team/ }).click();
       if (action)
         await page.getByRole("button", { name: action, exact: true }).click();
       const dialog = page.getByRole("dialog", { name: title, exact: true });
@@ -269,6 +270,20 @@ try {
             ).length,
         );
       if (misaligned) throw Error("Choice labels stack incorrectly: " + title);
+      const cramped = await dialog.evaluate((node) =>
+        [...node.querySelectorAll('form > button[type="submit"]')].some(
+          (button) => {
+            const above = button.previousElementSibling;
+            return (
+              above &&
+              button.getBoundingClientRect().top -
+                above.getBoundingClientRect().bottom <
+                12
+            );
+          },
+        ),
+      );
+      if (cramped) throw Error("Submit button too close to field: " + title);
       if (width < 700 && title === "Add New Client") {
         const body = dialog.locator(".onboarding-form-body");
         await body.evaluate(

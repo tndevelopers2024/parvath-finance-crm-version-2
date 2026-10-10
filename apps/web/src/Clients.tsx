@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Filter, Upload, ArrowUpDown, Trash2 } from "lucide-react";
-import { date, useData, useWrite } from "./api";
+import { date, useData, useInfiniteData, useWrite } from "./api";
+import DebouncedSearch from "./DebouncedSearch";
 import {
   Avatar,
   Badge,
@@ -12,10 +13,9 @@ import {
   Metrics,
   Modal,
   PageHeading,
-  Pagination,
+  InfiniteScroll,
   Panel,
   ProductIcon,
-  SearchInput,
   Tabs,
   FormError,
   useAuth,
@@ -39,20 +39,25 @@ export default function Clients() {
       location.pathname + location.search,
     );
   }, [location.pathname, location.search, user.organizationId]);
-  const p = Number(params.get("page") || 1),
-    q = params.get("q") || "",
+  const q = params.get("q") || "",
     kind = params.get("kind") || "",
     status = params.get("status") || "";
-  const change = (key: string, value: string) => {
-    setParams((prev) => {
-      if (value) prev.set(key, value);
-      else prev.delete(key);
-      if (key !== "page") prev.delete("page");
-      return prev;
-    });
+  const change = (key: string, value: string, replace = false) => {
+    setParams(
+      (prev) => {
+        if (value) prev.set(key, value);
+        else prev.delete(key);
+        if (key !== "page") prev.delete("page");
+        return prev;
+      },
+      { replace },
+    );
     setSelected([]);
   };
-  const results = useData("/clients?" + params.toString()),
+  const request = new URLSearchParams(params);
+  request.delete("page");
+  request.delete("limit");
+  const results = useInfiniteData("/clients?" + request.toString()),
     summary = useData("/clients/summary");
   const d = summary.data?.data || {};
   return (
@@ -140,9 +145,9 @@ export default function Clients() {
           </button>
         </div>
         <div className="filters">
-          <SearchInput
+          <DebouncedSearch
             value={q}
-            onChange={(v) => change("q", v)}
+            onCommit={(v) => change("q", v, true)}
             placeholder="Search by name, phone, email..."
           />
           <select
@@ -249,7 +254,14 @@ export default function Clients() {
         ) : results.error ? (
           <ErrorState error={results.error} retry={results.refetch} />
         ) : (
-          <>
+          <InfiniteScroll
+            hasMore={results.hasMore}
+            loadingMore={results.loadingMore}
+            onLoadMore={results.loadMore}
+            shown={results.data.data.length}
+            total={results.data.meta.total}
+            noun="clients"
+          >
             <div className="table-scroll">
               <table className="clients-table">
                 <thead>
@@ -257,7 +269,7 @@ export default function Clients() {
                     <th>
                       <input
                         type="checkbox"
-                        aria-label="Select all clients on this page"
+                        aria-label="Select all loaded clients"
                         checked={
                           !!results.data.data.length &&
                           results.data.data.every((c: any) =>
@@ -267,7 +279,11 @@ export default function Clients() {
                         onChange={(e) =>
                           setSelected(
                             e.target.checked
-                              ? results.data.data.map((c: any) => c.id)
+                              ? [
+                                  ...new Set<string>(
+                                    results.data.data.map((c: any) => c.id),
+                                  ),
+                                ]
                               : [],
                           )
                         }
@@ -400,13 +416,7 @@ export default function Clients() {
               </table>
             </div>
             {!results.data.data.length && <Empty />}
-            <Pagination
-              total={results.data.meta.total}
-              page={p}
-              limit={10}
-              onChange={(n) => change("page", String(n))}
-            />
-          </>
+          </InfiniteScroll>
         )}
       </Panel>
       {bulk && (
@@ -424,12 +434,16 @@ export default function Clients() {
                 className="primary"
                 disabled={write.isPending}
                 onClick={async () => {
-                  await write.mutateAsync({
-                    path: "/clients/bulk",
-                    body: { ids: selected, status: s },
-                  });
-                  setBulk(false);
-                  setSelected([]);
+                  try {
+                    await write.mutateAsync({
+                      path: "/clients/bulk",
+                      body: { ids: selected, status: s },
+                    });
+                    setBulk(false);
+                    setSelected([]);
+                  } catch {
+                    /* FormError displays error */
+                  }
                 }}
               >
                 {s}

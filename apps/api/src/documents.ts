@@ -1,3 +1,5 @@
+import { pipeline } from "node:stream/promises";
+import type { Readable } from "node:stream";
 import { Router } from "express";
 import multer from "multer";
 import { fileTypeFromBuffer } from "file-type";
@@ -11,7 +13,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { now } from "./domain.js";
-import { audit, HttpError, owned, permit } from "./security.js";
+import { audit, holdClient, HttpError, owned, permit } from "./security.js";
 export const s3 = new S3Client({
   region: config.S3_REGION,
   endpoint: config.S3_ENDPOINT || undefined,
@@ -70,6 +72,7 @@ documents.post(
     );
     try {
       const doc = await db.transaction(async (tx) => {
+        await holdClient(tx, c.id, req);
         const d = await tx.document.create({
           data: {
             organizationId: req.auth.organizationId,
@@ -121,11 +124,27 @@ documents.get("/documents/:id/download", async (req, res) => {
       409,
       "This file is quarantined until the security scan completes",
     );
-  const file = await s3.send(
-    new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: d.key }),
-  );
+  if (!config.S3_BUCKET)
+    throw new HttpError(503, "Private document storage is not configured");
+  let file;
+  try {
+    file = await s3.send(
+      new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: d.key }),
+    );
+  } catch (e: any) {
+    if (e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404)
+      throw new HttpError(404, "The stored file could not be found");
+    throw e;
+  }
   await audit(db, req, "download", "Document", d.id, "Document downloaded");
   res.type(d.contentType).attachment(d.name);
   res.setHeader("Cache-Control", "private, no-store");
-  (file.Body as any).pipe(res);
+  // pipeline destroys the S3 stream if the client goes away and surfaces a mid-stream failure
+  // as a rejection instead of an unhandled 'error' event that would take the process down.
+  try {
+    await pipeline(file.Body as Readable, res);
+  } catch {
+    if (!res.headersSent) throw new HttpError(502, "File download failed");
+    res.destroy();
+  }
 });

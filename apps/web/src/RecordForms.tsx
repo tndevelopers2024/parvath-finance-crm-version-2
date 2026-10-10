@@ -7,6 +7,7 @@ import {
 } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, Plus } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
+import DateField from "./DateField";
 import { date, query, rupees, time, toMinor, useData, useWrite } from "./api";
 import {
   Avatar,
@@ -164,13 +165,7 @@ export function NewRecord({
             {type !== "products" && (
               <label>
                 Owner *
-                <select name="ownerId" defaultValue={user.userId} required>
-                  {members.data?.data.map((m: any) => (
-                    <option key={m.user.id} value={m.user.id}>
-                      {m.user.name} · {m.role}
-                    </option>
-                  ))}
-                </select>
+                <OwnerSelect members={members} initial={user.userId} showRole />
               </label>
             )}
             {type === "leads" ? (
@@ -203,7 +198,7 @@ export function NewRecord({
                 <Priority />
                 <label>
                   Next Follow-up
-                  <input type="datetime-local" name="nextFollowUp" />
+                  <DateField withTime name="nextFollowUp" />
                 </label>
                 <label className="full">
                   Next Action *
@@ -232,7 +227,7 @@ export function NewRecord({
                 </label>
                 <label>
                   Date & Time (Asia/Kolkata) *
-                  <input name="dueAt" required type="datetime-local" />
+                  <DateField withTime name="dueAt" required />
                 </label>
                 <Priority />
                 <label>
@@ -303,7 +298,8 @@ export function NewRecord({
                   <input name="identifier" required minLength={3} />
                 </label>
                 <label>
-                  Start Date *<input name="startDate" type="date" required />
+                  Start Date *
+                  <DateField name="startDate" required />
                 </label>
                 <label>
                   Fulfilment Status
@@ -358,7 +354,52 @@ function Priority({ value = "Normal" }: { value?: string }) {
     </label>
   );
 }
+// Controlled so the default still applies when members load after the select mounts.
+// `current` marks `initial` as a record's existing owner, which stays selectable even if deactivated.
+function OwnerSelect({
+  members,
+  initial,
+  current = false,
+  showRole = false,
+}: {
+  members: { data?: any };
+  initial: string;
+  current?: boolean;
+  showRole?: boolean;
+}) {
+  const [chosen, setChosen] = useState<string>();
+  const options: any[] = (members.data?.data || []).filter(
+    (m: any) => m.user.active !== false || (current && m.user.id === initial),
+  );
+  const offered = (id?: string) => options.some((m) => m.user.id === id);
+  const known = offered(initial);
+  const value =
+    chosen !== undefined && (offered(chosen) || (current && chosen === initial))
+      ? chosen
+      : known || current
+        ? initial
+        : "";
+  return (
+    <select
+      name="ownerId"
+      value={value}
+      onChange={(e) => setChosen(e.target.value)}
+      required
+    >
+      {!known && current && <option value={initial}>Current owner</option>}
+      {value === "" && <option value="">Select owner</option>}
+      {options.map((m) => (
+        <option key={m.user.id} value={m.user.id}>
+          {m.user.name}
+          {showRole ? ` · ${m.role}` : ""}
+          {m.user.active === false ? " (deactivated)" : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
 export function LeadDetail() {
+  const [params] = useSearchParams();
   const { id } = useParams(),
     q = useData("/leads/" + id),
     catalogue = useData("/catalogue"),
@@ -369,7 +410,7 @@ export function LeadDetail() {
   const [stage, setStage] = useState(""),
     [reason, setReason] = useState(""),
     [accept, setAccept] = useState(false),
-    [edit, setEdit] = useState(false);
+    [edit, setEdit] = useState(() => params.get("edit") === "1");
   if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const l = q.data.data;
@@ -599,13 +640,7 @@ export function LeadDetail() {
             </label>
             <label>
               Owner
-              <select name="ownerId" defaultValue={l.ownerId}>
-                {members.data?.data.map((m: any) => (
-                  <option key={m.user.id} value={m.user.id}>
-                    {m.user.name}
-                  </option>
-                ))}
-              </select>
+              <OwnerSelect members={members} initial={l.ownerId} current />
             </label>
             <Priority value={l.priority} />
             <label>
@@ -774,10 +809,10 @@ export function FollowupDetail() {
               <>
                 <label>
                   Date & Time (Asia/Kolkata)
-                  <input
+                  <DateField
+                    withTime
                     required
                     name="dueAt"
-                    type="datetime-local"
                     defaultValue={new Date(
                       new Date(f.dueAt).getTime() + 19800000,
                     )
@@ -787,13 +822,7 @@ export function FollowupDetail() {
                 </label>
                 <label>
                   Owner
-                  <select name="ownerId" defaultValue={f.ownerId}>
-                    {members.data?.data.map((m: any) => (
-                      <option key={m.user.id} value={m.user.id}>
-                        {m.user.name}
-                      </option>
-                    ))}
-                  </select>
+                  <OwnerSelect members={members} initial={f.ownerId} current />
                 </label>
                 <label>
                   Channel
@@ -833,7 +862,7 @@ export function FollowupDetail() {
                 {mode === "complete" && (
                   <label>
                     Schedule subsequent follow-up (optional)
-                    <input name="nextDueAt" type="datetime-local" />
+                    <DateField withTime name="nextDueAt" />
                   </label>
                 )}
               </>
@@ -849,16 +878,28 @@ export function FollowupDetail() {
 export function RenewalDetail() {
   const { id } = useParams(),
     q = useData("/renewals/" + id),
+    user = useAuth(),
     write = useWrite(),
     toast = useToast();
-  const [mode, setMode] = useState("");
+  const [mode, setMode] = useState(""),
+    [reversing, setReversing] = useState<any>(null);
   if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
+  // Net paid and outstanding come from the API so reversals are netted once.
   const e = q.data.data,
-    paid = e.payments.reduce(
-      (a: bigint, p: any) => a + BigInt(p.amountMinor),
-      0n,
-    );
+    paid = BigInt(e.paidMinor),
+    outstanding = BigInt(e.outstandingMinor);
+  // A reversal is a negative row whose reference names the payment it offsets.
+  const isReversal = (p: any) => BigInt(p.amountMinor) < 0n,
+    reversed = (p: any) =>
+      e.payments.some(
+        (r: any) =>
+          isReversal(r) && r.reference === "Reversal of " + p.reference,
+      );
+  // Corrections and cancellation need the same role as scheduling an event.
+  const canEdit = user.role !== "Operations";
+  const rupeeInput = (minor: bigint) =>
+    `${minor / 100n}.${String(minor % 100n).padStart(2, "0")}`;
   return (
     <>
       <Back to="/renewals">Back to Renewals</Back>
@@ -896,6 +937,12 @@ export function RenewalDetail() {
               <dt>Recorded Payments</dt>
               <dd>{rupees(paid)}</dd>
             </div>
+            {e.status === "Pending" && (
+              <div>
+                <dt>Outstanding</dt>
+                <dd>{rupees(outstanding)}</dd>
+              </div>
+            )}
             <div>
               <dt>Frequency</dt>
               <dd>
@@ -916,6 +963,12 @@ export function RenewalDetail() {
             <p className="success-note">
               Event confirmed. Its history and payments are preserved.
             </p>
+          ) : e.status === "Cancelled" ? (
+            <p className="muted">
+              Event cancelled{e.cancelledAt ? " on " + date(e.cancelledAt) : ""}
+              {e.cancelReason ? ": " + e.cancelReason : "."} It is no longer
+              counted as due and is kept for history.
+            </p>
           ) : (
             <div className="stack-actions">
               {e.type !== "Loan review" && (
@@ -935,11 +988,89 @@ export function RenewalDetail() {
               >
                 Add Follow-up
               </Link>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    write.reset();
+                    setMode("edit");
+                  }}
+                >
+                  Edit Event
+                </button>
+              )}
+              {canEdit && paid === 0n && (
+                <button
+                  onClick={() => {
+                    write.reset();
+                    setMode("cancel");
+                  }}
+                >
+                  Cancel Event
+                </button>
+              )}
+              {canEdit && paid !== 0n && (
+                <p className="muted">
+                  An event with a recorded payment cannot be cancelled. Reverse
+                  the payment first if it was recorded in error.
+                </p>
+              )}
             </div>
           )}
           <FormError error={write.error} />
         </Panel>
       </div>
+      {!!e.payments.length && (
+        <Panel title="Payments & Receipts">
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Recorded</th>
+                  <th>Reference</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {e.payments.map((p: any) => (
+                  <tr key={p.id}>
+                    <td>{date(p.recordedAt)}</td>
+                    <td>{p.reference}</td>
+                    <td>{rupees(p.amountMinor)}</td>
+                    <td>
+                      <Badge>
+                        {isReversal(p)
+                          ? "Reversal"
+                          : reversed(p)
+                            ? "Reversed"
+                            : "Recorded"}
+                      </Badge>
+                    </td>
+                    <td>
+                      {canEdit &&
+                        e.status === "Pending" &&
+                        !isReversal(p) &&
+                        !reversed(p) && (
+                          <button
+                            className="small"
+                            onClick={() => {
+                              write.reset();
+                              setReversing(p);
+                              setMode("reverse");
+                            }}
+                          >
+                            Reverse
+                          </button>
+                        )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
       <Panel title="Renewal & Event History">
         <div className="table-scroll">
           <table>
@@ -983,7 +1114,13 @@ export function RenewalDetail() {
               ? "Record payment / receipt"
               : mode === "reminder"
                 ? "Schedule reminder"
-                : "Confirm financial event"
+                : mode === "edit"
+                  ? "Edit financial event"
+                  : mode === "cancel"
+                    ? "Cancel financial event"
+                    : mode === "reverse"
+                      ? "Reverse payment"
+                      : "Confirm financial event"
           }
           onClose={() => setMode("")}
         >
@@ -991,23 +1128,54 @@ export function RenewalDetail() {
             onSubmit={async (ev) => {
               const f = formValues(ev);
               try {
-                await write.mutateAsync({
-                  path: `/renewals/${id}/${mode === "reminder" ? "reminder" : mode}`,
-                  body:
-                    mode === "payment"
-                      ? {
-                          reference: f.reference,
-                          amountMinor: toMinor(f.amount),
-                        }
-                      : mode === "reminder"
-                        ? { runAt: localISO(f.runAt) }
-                        : { version: e.version },
-                });
+                const r = await write.mutateAsync(
+                  mode === "edit"
+                    ? {
+                        path: `/renewals/${id}`,
+                        method: "PATCH",
+                        body: {
+                          dueDate: f.dueDate,
+                          amountMinor:
+                            e.type === "Loan review"
+                              ? undefined
+                              : toMinor(f.amount),
+                          recurrenceMonths: f.recurrenceMonths
+                            ? Number(f.recurrenceMonths)
+                            : null,
+                          version: e.version,
+                        },
+                      }
+                    : {
+                        path:
+                          mode === "reverse"
+                            ? `/renewals/${id}/payments/${reversing.id}/reverse`
+                            : `/renewals/${id}/${mode === "reminder" ? "reminder" : mode}`,
+                        body:
+                          mode === "payment"
+                            ? {
+                                reference: f.reference,
+                                amountMinor: toMinor(f.amount),
+                              }
+                            : mode === "reminder"
+                              ? { runAt: localISO(f.runAt) }
+                              : mode === "cancel"
+                                ? { reason: f.reason, version: e.version }
+                                : mode === "reverse"
+                                  ? { reason: f.reason }
+                                  : { version: e.version },
+                      },
+                );
                 setMode("");
                 toast(
                   mode === "reminder"
                     ? "In-app reminder scheduled"
-                    : "Event updated",
+                    : mode === "cancel"
+                      ? "Event cancelled"
+                      : mode === "reverse"
+                        ? "Payment reversed"
+                        : r.meta?.remindersCancelled
+                          ? "Event updated; reminders for the old date were cancelled"
+                          : "Event updated",
                 );
               } catch {
                 /* Render error */
@@ -1023,7 +1191,7 @@ export function RenewalDetail() {
                     type="number"
                     step="0.01"
                     min="0.01"
-                    defaultValue={Number(BigInt(e.amountMinor) - paid) / 100}
+                    defaultValue={Number(outstanding) / 100}
                     required
                   />
                 </label>
@@ -1040,7 +1208,85 @@ export function RenewalDetail() {
                 </p>
                 <label>
                   Date & Time (Asia/Kolkata)
-                  <input type="datetime-local" name="runAt" required />
+                  <DateField withTime name="runAt" required />
+                </label>
+              </>
+            ) : mode === "edit" ? (
+              <>
+                <label>
+                  Due Date
+                  <DateField
+                    name="dueDate"
+                    defaultValue={e.dueDate.slice(0, 10)}
+                    required
+                  />
+                </label>
+                {e.type !== "Loan review" && (
+                  <label>
+                    Amount (₹)
+                    <input
+                      name="amount"
+                      type="number"
+                      step="0.01"
+                      min={rupeeInput(paid)}
+                      defaultValue={rupeeInput(BigInt(e.amountMinor))}
+                      required
+                    />
+                  </label>
+                )}
+                <label>
+                  Repeat every (months; blank for one-time)
+                  <input
+                    name="recurrenceMonths"
+                    type="number"
+                    min="1"
+                    max="120"
+                    defaultValue={e.recurrenceMonths || ""}
+                  />
+                </label>
+                <p className="muted">
+                  {paid > 0n
+                    ? "The amount cannot go below the " +
+                      rupees(paid) +
+                      " already recorded as paid. "
+                    : ""}
+                  Changing the due date cancels reminders scheduled for the old
+                  date.
+                </p>
+              </>
+            ) : mode === "cancel" ? (
+              <>
+                <p>
+                  Cancelling removes this event from due, overdue and expected
+                  revenue totals. It stays in the history, no next recurrence is
+                  created, and this cannot be undone.
+                </p>
+                <label>
+                  Reason
+                  <textarea
+                    name="reason"
+                    minLength={3}
+                    maxLength={300}
+                    required
+                  />
+                </label>
+              </>
+            ) : mode === "reverse" ? (
+              <>
+                <p>
+                  Reversing {reversing.reference} (
+                  {rupees(reversing.amountMinor)}) adds an offsetting entry; the
+                  original stays in the history. The reference cannot be reused
+                  on this event, and this cannot be undone.
+                </p>
+                <label>
+                  Reason
+                  <textarea
+                    name="reason"
+                    minLength={3}
+                    maxLength={300}
+                    required
+                  />
                 </label>
               </>
             ) : (
@@ -1051,7 +1297,15 @@ export function RenewalDetail() {
               </p>
             )}
             <FormError error={write.error} />
-            <Submit busy={write.isPending}>Confirm</Submit>
+            <Submit busy={write.isPending}>
+              {mode === "edit"
+                ? "Save changes"
+                : mode === "cancel"
+                  ? "Cancel event"
+                  : mode === "reverse"
+                    ? "Reverse payment"
+                    : "Confirm"}
+            </Submit>
           </form>
         </Modal>
       )}
@@ -1122,10 +1376,12 @@ export function ProductDetail() {
       <Panel
         title="Scheduled Events"
         action={
-          <button className="primary" onClick={() => setMode("event")}>
-            <Plus size={16} />
-            Add Event
-          </button>
+          p.status !== "Closed" && (
+            <button className="primary" onClick={() => setMode("event")}>
+              <Plus size={16} />
+              Add Event
+            </button>
+          )
         }
       >
         {p.events.map((e: any) => (
@@ -1153,7 +1409,7 @@ export function ProductDetail() {
             onSubmit={async (e) => {
               const f = formValues(e);
               try {
-                await write.mutateAsync(
+                const r = await write.mutateAsync(
                   mode === "event"
                     ? {
                         path: "/renewals",
@@ -1186,7 +1442,11 @@ export function ProductDetail() {
                       },
                 );
                 setMode("");
-                toast("Product updated");
+                toast(
+                  r.data?.cancelledEvents
+                    ? `Product closed; ${r.data.cancelledEvents} pending event${r.data.cancelledEvents === 1 ? "" : "s"} cancelled`
+                    : "Product updated",
+                );
               } catch {
                 /* Render error */
               }
@@ -1211,7 +1471,7 @@ export function ProductDetail() {
                 </label>
                 <label>
                   Due Date
-                  <input name="dueDate" type="date" required />
+                  <DateField name="dueDate" required />
                 </label>
                 <label>
                   Amount (₹)
@@ -1253,9 +1513,8 @@ export function ProductDetail() {
                 </label>
                 <label>
                   Start Date
-                  <input
+                  <DateField
                     name="startDate"
-                    type="date"
                     defaultValue={p.startDate.slice(0, 10)}
                     required
                   />

@@ -6,6 +6,9 @@ import {
   followupSchema,
   productSchema,
   eventSchema,
+  eventUpdateSchema,
+  eventCancelSchema,
+  paymentReversalSchema,
 } from "../packages/contracts/src/index.js";
 const schemas = Object.fromEntries(
   Object.entries({
@@ -14,6 +17,7 @@ const schemas = Object.fromEntries(
     FollowUp: followupSchema,
     Product: productSchema,
     FinancialEvent: eventSchema,
+    FinancialEventUpdate: eventUpdateSchema,
   }).map(([k, s]) => [
     k,
     z.toJSONSchema(s, { io: "input", unrepresentable: "any" }),
@@ -115,6 +119,13 @@ for (const [name, schema] of [
       "Update with optimistic version",
       schema,
     );
+  else
+    add(
+      "/renewals/{id}",
+      "patch",
+      "Correct due date, amount or recurrence of a pending event; version required",
+      "FinancialEventUpdate",
+    );
 }
 for (const [path, method, summary] of [
   ["/health", "get", "Process liveness"],
@@ -173,11 +184,21 @@ for (const [path, method, summary] of [
     "Record exact minor-unit payment with unique reference",
   ],
   [
+    "/renewals/{id}/payments/{paymentId}/reverse",
+    "post",
+    "Reverse one payment on a pending event with a reason; edit permission",
+  ],
+  [
     "/renewals/{id}/complete",
     "post",
     "Confirm fully paid event and establish next recurrence",
   ],
   ["/renewals/{id}/reminder", "post", "Schedule durable in-app reminder"],
+  [
+    "/renewals/{id}/cancel",
+    "post",
+    "Cancel an unpaid pending event with a reason; no next recurrence",
+  ],
   [
     "/followups/{id}/complete",
     "post",
@@ -253,6 +274,8 @@ const actionSchemas: Record<string, any> = {
   }),
   "/renewals/{id}/complete": z.object({ version: z.number().int() }),
   "/renewals/{id}/reminder": z.object({ runAt: z.iso.datetime() }),
+  "/renewals/{id}/cancel": eventCancelSchema,
+  "/renewals/{id}/payments/{paymentId}/reverse": paymentReversalSchema,
   "/followups/{id}/complete": z.object({
     version: z.number().int(),
     state: z.enum(["completed", "cancelled"]),

@@ -1,7 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import { parse } from "csv-parse/sync";
-import { clientSchema } from "../../../packages/contracts/src/index.js";
+import {
+  clientImportRowSchema,
+  clientSchema,
+} from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
 import type { Database } from "./persistence/repository.js";
 
@@ -17,6 +20,7 @@ async function lockContactChanges(tx: Database, organizationId: string) {
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { config } from "./config.js";
 import { s3 } from "./documents.js";
+import { logger } from "./app.js";
 import { audit, HttpError, owned, permit } from "./security.js";
 import {
   clientInclude,
@@ -95,6 +99,8 @@ export async function createClient(
   v: z.output<typeof clientSchema>,
   org: string,
   owner: string,
+  // The import commit has no use for the full client graph; skipping it drops a multi-join read per row.
+  options: { readBack?: boolean } = {},
 ) {
   const d = clientData(v);
   const created = await tx.client.create({
@@ -127,7 +133,9 @@ export async function createClient(
           }
         : undefined,
     },
-    include: clientInclude,
+    ...(options.readBack === false
+      ? { select: { id: true } }
+      : { include: clientInclude }),
   });
   const followup = v.onboardingProfile?.initialFollowup;
   if (followup?.enabled && followup.date && followup.notes) {
@@ -159,9 +167,10 @@ clients.get("/", async (req, res) => {
       direction: z.enum(["asc", "desc"]).default("asc"),
     })
     .parse(req.query);
+  // `kind` is filtered once, in AND below; a second copy at the top level
+  // would repeat the contact join for every client.
   const where: any = {
     organizationId: req.auth.organizationId,
-    ...(q.kind ? { contact: { kind: q.kind } } : {}),
     ...(q.status ? { status: q.status } : {}),
   };
   where.AND = [
@@ -189,19 +198,30 @@ clients.get("/", async (req, res) => {
         ]
       : []),
   ];
-  const [rows, total] = await Promise.all([
+  const skip = (q.page - 1) * q.limit;
+  const readRows = () =>
     db.client.findMany({
       where,
       include: clientInclude,
-      skip: (q.page - 1) * q.limit,
+      skip,
       take: q.limit,
       orderBy:
         q.sort === "name"
           ? { contact: { name: q.direction } }
           : { createdAt: q.direction },
-    }),
-    db.client.count({ where }),
-  ]);
+    });
+  // Filters on the contact or on products join per client; counting repeats
+  // that work, so a short page (fewer rows than asked for) supplies the total.
+  const joined = Boolean(q.kind || q.city || q.product || q.q);
+  let rows: Awaited<ReturnType<typeof readRows>>, total: number;
+  if (joined) {
+    rows = await readRows();
+    total =
+      rows.length < q.limit && (rows.length > 0 || skip === 0)
+        ? skip + rows.length
+        : await db.client.count({ where });
+  } else
+    [rows, total] = await Promise.all([readRows(), db.client.count({ where })]);
   res.json({
     data: rows.map(flattenClient),
     meta: { total, page: q.page, limit: q.limit },
@@ -246,19 +266,28 @@ clients.post("/import/preview", permit("edit"), async (req, res) => {
   }
   if (!rows.length || rows.length > 500)
     throw new HttpError(400, "Import 1–500 rows at a time");
-  const seen = new Set<string>();
+  // Rows of the same file are de-duplicated on phone and (case-insensitively) email; the first occurrence wins.
+  const seenPhones = new Map<string, number>();
+  const seenEmails = new Map<string, number>();
   const preview = [];
   for (const [i, row] of rows.entries()) {
-    const p = clientSchema.safeParse(row);
+    const p = clientImportRowSchema.safeParse(row) as
+      | { success: true; data: z.output<typeof clientSchema> }
+      | { success: false; error: z.ZodError };
     let error = p.success
       ? ""
       : p.error.issues
           .map((x) => `${x.path.join(".")}: ${x.message}`)
           .join("; ");
     if (p.success) {
-      if (
-        seen.has(p.data.phone) ||
-        (await db.contact.count({
+      const email = p.data.email?.toLowerCase();
+      const earlier =
+        seenPhones.get(p.data.phone) ??
+        (email ? seenEmails.get(email) : undefined);
+      if (earlier !== undefined)
+        error = `Duplicate of row ${earlier} in this file; review and add individually if appropriate`;
+      else if (
+        await db.contact.count({
           where: {
             organizationId: req.auth.organizationId,
             OR: [
@@ -266,10 +295,12 @@ clients.post("/import/preview", permit("edit"), async (req, res) => {
               ...(p.data.email ? [{ email: p.data.email }] : []),
             ],
           },
-        }))
+        })
       )
         error = "Duplicate contact; review and add individually if appropriate";
-      seen.add(p.data.phone);
+      // Remember even flagged rows so a later row repeating them is also flagged.
+      seenPhones.set(p.data.phone, seenPhones.get(p.data.phone) ?? i + 2);
+      if (email) seenEmails.set(email, seenEmails.get(email) ?? i + 2);
     }
     preview.push({ row: i + 2, data: p.success ? p.data : row, error });
   }
@@ -282,27 +313,69 @@ clients.post("/import/preview", permit("edit"), async (req, res) => {
   });
   res.json({ data: { id: job.id, rows: preview } });
 });
-clients.post("/import/:id/commit", permit("edit"), async (req, res) => {
-  await owned("importJob", String(req.params.id), req);
-  const job = await db.transaction(async (tx) => {
-    const j = await tx.importJob.findUniqueOrThrow({
-      where: { id: String(req.params.id) },
-    });
+// Import commit runs in bounded chunks. Each createClient is roughly 10-20 sequential round trips; at
+// 25-60 ms per Atlas round trip that is ~0.3-1.2 s per row, so 20 rows is ~6-24 s, safely inside the
+// 45 s transaction timeoutMS (repository.ts) even with a retry of the callback, while 500 rows is 25
+// short transactions instead of one that always aborts. The per-organisation contact lock is held
+// only for one chunk. A request stops starting new chunks after IMPORT_REQUEST_BUDGET_MS and returns
+// state "Partial"; the caller commits again to continue (the UI does this automatically).
+const IMPORT_CHUNK_SIZE = 20;
+const IMPORT_REQUEST_BUDGET_MS = 20000;
+// A Processing job whose last chunk is older than this is treated as abandoned (crashed process).
+const IMPORT_STALE_MS = 90000;
+type ImportProgress = {
+  total: number;
+  processed: number;
+  created: number;
+  skipped: number;
+  failed: number;
+  errors: { row: number; error: string }[];
+  chunkSize: number;
+  updatedAt: string;
+  lastError?: string;
+};
+function importProgress(job: any): ImportProgress {
+  const r = job.result as Partial<ImportProgress> | null;
+  return {
+    total: (job.rows as any[]).length,
+    processed: r?.processed ?? 0,
+    created: r?.created ?? 0,
+    skipped: r?.skipped ?? 0,
+    failed: r?.failed ?? 0,
+    errors: r?.errors ?? [],
+    chunkSize: IMPORT_CHUNK_SIZE,
+    updatedAt: r?.updatedAt ?? new Date(0).toISOString(),
+    ...(r?.lastError ? { lastError: r.lastError } : {}),
+  };
+}
+// One chunk = one transaction. The job row is re-read inside it and its cursor (`processed`) is
+// advanced in the same transaction as the clients it covers, so a row is created at most once no
+// matter how many retries or concurrent commits happen, and progress is never ahead of the data.
+async function commitImportChunk(req: any, jobId: string) {
+  return db.transaction(async (tx) => {
+    const j = await tx.importJob.findUniqueOrThrow({ where: { id: jobId } });
     if (j.state === "Completed") return j;
-    const lock = await tx.importJob.updateMany({
-      where: { id: j.id, state: "Preview" },
-      data: { state: "Processing" },
-    });
-    if (!lock.count) throw new HttpError(409, "Import already processing");
+    const rows = j.rows as any[];
+    const p = importProgress(j);
     await lockContactChanges(tx, req.auth.organizationId);
+    let budget = IMPORT_CHUNK_SIZE;
     let created = 0;
-    const errors: any[] = [];
-    for (const r of j.rows as any[]) {
+    while (p.processed < rows.length && budget > 0) {
+      const r = rows[p.processed];
+      p.processed++;
       if (r.error) {
-        errors.push({ row: r.row, error: r.error });
+        p.skipped++;
+        p.errors.push({ row: r.row, error: r.error });
         continue;
       }
-      const v = clientSchema.parse(r.data);
+      const parsed = clientSchema.safeParse(r.data);
+      if (!parsed.success) {
+        p.failed++;
+        p.errors.push({ row: r.row, error: "Row data is no longer valid" });
+        continue;
+      }
+      budget--;
+      const v = parsed.data;
       const match = await tx.contact.count({
         where: {
           organizationId: req.auth.organizationId,
@@ -310,31 +383,93 @@ clients.post("/import/:id/commit", permit("edit"), async (req, res) => {
         },
       });
       if (match) {
-        errors.push({
-          row: r.row,
-          error: "Duplicate detected during commit",
-        });
+        p.skipped++;
+        p.errors.push({ row: r.row, error: "Duplicate detected during commit" });
         continue;
       }
-      await createClient(tx, v, req.auth.organizationId, req.auth.userId);
+      await createClient(tx, v, req.auth.organizationId, req.auth.userId, {
+        readBack: false,
+      });
+      p.created++;
       created++;
     }
-    await audit(
-      tx,
-      req,
-      "import",
-      "ImportJob",
-      j.id,
-      `Imported ${created} clients`,
-    );
+    const done = p.processed >= rows.length;
+    if (created || done)
+      await audit(
+        tx,
+        req,
+        "import",
+        "ImportJob",
+        j.id,
+        done
+          ? `Imported ${p.created} clients`
+          : `Imported ${created} clients (${p.processed}/${rows.length} rows)`,
+      );
+    p.updatedAt = new Date().toISOString();
+    delete p.lastError;
     return tx.importJob.update({
       where: { id: j.id },
       data: {
-        state: "Completed",
-        result: { created, skipped: errors.length, errors },
+        state: done ? "Completed" : "Processing",
+        result: p,
       },
     });
   });
+}
+clients.post("/import/:id/commit", permit("edit"), async (req, res) => {
+  const found = await owned("importJob", String(req.params.id), req);
+  if (found.state === "Completed") return res.json({ data: found });
+  // Claim: Preview, Partial and Failed jobs are resumable; a fresh Processing job belongs to another request.
+  const progress = importProgress(found);
+  if (found.state === "Processing") {
+    if (Date.now() - Date.parse(progress.updatedAt) < IMPORT_STALE_MS)
+      throw new HttpError(409, "Import already processing");
+  } else {
+    const claim = await db.importJob.updateMany({
+      where: { id: found.id, state: found.state },
+      data: {
+        state: "Processing",
+        result: { ...progress, updatedAt: new Date().toISOString() },
+      },
+    });
+    if (!claim.count) throw new HttpError(409, "Import already processing");
+  }
+  const started = Date.now();
+  let job: any;
+  try {
+    do {
+      job = await commitImportChunk(req, found.id);
+    } while (
+      job.state !== "Completed" &&
+      Date.now() - started < IMPORT_REQUEST_BUDGET_MS
+    );
+  } catch (err: any) {
+    logger.error(
+      { requestId: req.requestId, importJobId: found.id, errorType: err?.name },
+      "Import chunk failed",
+    );
+    // Earlier chunks stay committed; record the failure so the job is visible and resumable.
+    const current = await db.importJob.findUniqueOrThrow({
+      where: { id: found.id },
+    });
+    const failedJob = await db.importJob.update({
+      where: { id: found.id },
+      data: {
+        state: "Failed",
+        result: {
+          ...importProgress(current),
+          lastError: "A batch failed to save. Retry to continue the import.",
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+    return res.json({ data: failedJob });
+  }
+  if (job.state === "Processing")
+    job = await db.importJob.update({
+      where: { id: found.id },
+      data: { state: "Partial" },
+    });
   res.json({ data: job });
 });
 clients.post("/", permit("edit"), async (req, res) => {
@@ -517,8 +652,21 @@ clients.patch("/:id", permit("edit"), async (req, res) => {
 });
 clients.delete("/:id", permit("edit"), async (req, res) => {
   const c = await owned("client", String(req.params.id), req);
+  // Object keys are only collected inside the transaction (it may be retried or fail at commit);
+  // the objects are deleted from S3 after a successful commit.
+  let objectKeys: string[] = [];
   await db.transaction(async (tx) => {
+    objectKeys = [];
     await lockContactChanges(tx, req.auth.organizationId);
+    // Conflicts with any transaction adding a record to this client (see holdClient).
+    const clientLock = { _id: `client:${c.id}` };
+    await tx.native
+      .collection<any>("contactLocks")
+      .updateOne(
+        clientLock,
+        { $inc: { revision: 1 } },
+        { session: tx.session, upsert: true },
+      );
 
     // 1. Opportunities and stage history
     const opportunities = await tx.opportunity.findMany({
@@ -562,17 +710,7 @@ clients.delete("/:id", permit("edit"), async (req, res) => {
         },
       });
       await tx.document.deleteMany({ where: { id: { in: docIds } } });
-      if (config.S3_BUCKET) {
-        for (const d of docs) {
-          try {
-            await s3.send(
-              new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: d.key }),
-            );
-          } catch {
-            // S3 cleanup errors do not block client removal
-          }
-        }
-      }
+      objectKeys = docs.map((d: any) => d.key).filter(Boolean);
     }
 
     // 5. Communications, notes, consents, and tags
@@ -590,10 +728,32 @@ clients.delete("/:id", permit("edit"), async (req, res) => {
     // 7. Client and Contact
     await tx.client.delete({ where: { id: c.id } });
     await tx.contact.delete({ where: { id: c.contactId } });
+    await tx.native
+      .collection<any>("contactLocks")
+      .deleteOne(clientLock, { session: tx.session });
 
     // 8. Audit log
     await audit(tx, req, "delete", "Client", c.id, "Client record deleted");
   });
+  // The client is gone; storage cleanup failures must not fail the request. Leftover keys are
+  // logged (no retry job exists for them yet).
+  if (config.S3_BUCKET && objectKeys.length) {
+    const leftover: string[] = [];
+    for (const key of objectKeys) {
+      try {
+        await s3.send(
+          new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key }),
+        );
+      } catch {
+        leftover.push(key);
+      }
+    }
+    if (leftover.length)
+      logger.warn(
+        { requestId: req.requestId, clientId: c.id, leftoverKeys: leftover },
+        "Client deleted but some document objects could not be removed from storage",
+      );
+  }
   res.json({ data: { success: true } });
 });
 clients.post("/:id/relationships", permit("edit"), async (req, res) => {

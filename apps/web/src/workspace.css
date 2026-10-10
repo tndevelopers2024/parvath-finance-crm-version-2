@@ -1472,3 +1472,78 @@ html.dark .app-shell.workspace-redesign .product-icon.lavender {
   background: #37303f;
   color: #c2b5d0;
 }
+
+.app-shell.workspace-redesign .lead-board {
+  display: flex;
+  align-items: stretch;
+}
+.app-shell.workspace-redesign .lead-column {
+  flex: 1 0 260px;
+}
+.app-shell.workspace-redesign .lead-column header { position: relative; }
+.app-shell.workspace-redesign .lead-column h2 { padding-right: 28px; }
+.app-shell.workspace-redesign .lead-column-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ws-muted);
+  border-radius: 6px;
+}
+.app-shell.workspace-redesign .lead-column-toggle:hover { background: var(--ws-selected); }
+.app-shell.workspace-redesign .lead-column.is-collapsed {
+  flex: 0 0 56px;
+  width: 56px;
+  padding: 12px 8px;
+}
+.app-shell.workspace-redesign .lead-column.is-collapsed header { padding: 36px 0 0; }
+.app-shell.workspace-redesign .lead-column.is-collapsed .lead-column-toggle { right: 6px; }
+.app-shell.workspace-redesign .lead-column.is-collapsed h2 {
+  writing-mode: vertical-rl;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0;
+  margin: 0 auto;
+}
+.app-shell.workspace-redesign .lead-column.is-collapsed h2 b { writing-mode: horizontal-tb; }
+.app-shell.workspace-redesign .lead-column.is-collapsed header p,
+.app-shell.workspace-redesign .lead-column-cards[hidden] { display: none; }
+.app-shell.workspace-redesign .lead-add-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 16px;
+  border: 1px dashed var(--ws-green);
+  border-radius: 12px;
+  background: var(--ws-selected);
+  color: var(--ws-green);
+  font-weight: 600;
+}
+.app-shell.workspace-redesign .lead-add-bar:hover { filter: brightness(0.96); }
+
+.app-shell.workspace-redesign .lead-card-edit {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 5px 9px;
+  border: 1px solid var(--ws-line);
+  border-radius: 6px;
+  color: var(--ws-green);
+  font-size: 11px;
+  font-weight: 600;
+}
+.app-shell.workspace-redesign .lead-card-edit:hover {
+  background: var(--ws-selected);
+}

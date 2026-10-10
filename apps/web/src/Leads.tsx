@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
@@ -9,7 +10,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
 import { date, query, useData, useWrite } from "./api";
 import {
@@ -19,9 +20,11 @@ import {
   Loading,
   Metrics,
   ProductIcon,
+  useAuth,
   useToast,
 } from "./components";
 export default function Leads() {
+  const user = useAuth();
   const [params] = useSearchParams(),
     navigate = useNavigate(),
     toast = useToast(),
@@ -41,6 +44,40 @@ export default function Leads() {
   );
   const d = stats.data?.data || {},
     rows = q.data?.data || [];
+  const boardRef = useRef<HTMLDivElement>(null);
+  // A plain mouse wheel moves the board sideways, so scrolling works anywhere over it.
+  // A column whose cards can still scroll keeps the wheel, and the page scrolls once the
+  // board reaches its end. The listener must be non-passive to cancel the default.
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || !e.deltaY) return;
+      const cards = (e.target as HTMLElement).closest(".lead-column-cards");
+      if (
+        cards instanceof HTMLElement &&
+        cards.scrollHeight > cards.clientHeight
+      ) {
+        const down = e.deltaY > 0;
+        const room = down
+          ? cards.scrollTop + cards.clientHeight < cards.scrollHeight - 1
+          : cards.scrollTop > 0;
+        if (room) return;
+      }
+      const amount = e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+      const max = board.scrollWidth - board.clientWidth;
+      const canMove =
+        amount > 0 ? board.scrollLeft < max - 1 : board.scrollLeft > 0;
+      if (!canMove) return;
+      e.preventDefault();
+      board.scrollLeft += amount;
+    };
+    board.addEventListener("wheel", onWheel, { passive: false });
+    return () => board.removeEventListener("wheel", onWheel);
+  }, [q.isPending]);
+  // One stage at a time: a column is about 300px wide plus its gap.
+  const scrollBoard = (direction: number) =>
+    boardRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
   const move = async (e: DragEndEvent) => {
     if (!e.over) return;
     const lead = rows.find((r: any) => r.id === e.active.id),
@@ -70,7 +107,7 @@ export default function Leads() {
         items={[
           {
             label: "Total Leads",
-            value: d.leads?.length,
+            value: d.totalLeads ?? d.leads?.length,
             icon: "clients",
             note: "All opportunities",
             to: "/leads",
@@ -101,14 +138,40 @@ export default function Leads() {
           },
         ]}
       />
+      {user.role !== "Operations" && (
+        <Link className="lead-add-bar" to="/leads/new">
+          <Plus size={18} /> Add Lead
+        </Link>
+      )}
       {q.isPending ? (
         <Loading layout="board" />
       ) : q.error ? (
         <ErrorState error={q.error} />
       ) : (
         <DndContext sensors={sensors} onDragEnd={move}>
-          <div className="lead-board">
-            {stages.map((s, i) => (
+          <div className="lead-board-nav">
+            <span>
+              Swipe, use shift + scroll, or the arrows to see every stage
+            </span>
+            <div>
+              <button
+                type="button"
+                aria-label="Scroll stages left"
+                onClick={() => scrollBoard(-1)}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Scroll stages right"
+                onClick={() => scrollBoard(1)}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="lead-board" ref={boardRef}>
+            {stages.map((s, i) => s === "Qualified" ? null : (
               <LeadColumn
                 key={s}
                 stage={s}
@@ -131,14 +194,24 @@ function LeadColumn({
   index: number;
   rows: any[];
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <section
       ref={setNodeRef}
-      className={`lead-column stage-${index} ${isOver ? "drag-over" : ""}`}
+      className={`lead-column stage-${index} ${isOver ? "drag-over" : ""} ${collapsed ? "is-collapsed" : ""}`}
       aria-label={stage}
     >
       <header>
+        <button
+          type="button"
+          className="lead-column-toggle"
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${stage}`}
+          aria-expanded={!collapsed}
+          onClick={() => setCollapsed((value) => !value)}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
         <h2>
           {stage}
           <b>{rows.length}</b>
@@ -156,7 +229,7 @@ function LeadColumn({
           }
         </p>
       </header>
-      <div className="lead-column-cards">
+      <div className="lead-column-cards" hidden={collapsed}>
         {rows.map((l) => (
           <LeadCard key={l.id} lead={l} />
         ))}
@@ -206,6 +279,13 @@ function LeadCard({ lead: l }: { lead: any }) {
           </Badge>
           <span>{date(l.nextFollowUp || l.createdAt).replace("2026", "")}</span>
         </div>
+        <Link
+          className="lead-card-edit"
+          to={`/leads/${l.id}${["Won", "Lost"].includes(l.stage) ? "" : "?edit=1"}`}
+          aria-label={`${["Won", "Lost"].includes(l.stage) ? "View" : "Edit"} lead for ${l.client.name}`}
+        >
+          {["Won", "Lost"].includes(l.stage) ? "View details" : "Edit lead"}
+        </Link>
       </div>
       <button
         className="drag-handle"

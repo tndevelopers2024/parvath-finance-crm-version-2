@@ -70,6 +70,8 @@ export const events = products.map((p, i) => ({
   status: "Pending",
   timing: i < 2 ? "Due Today" : "Upcoming",
   amountMinor: "4500000",
+  paidMinor: "0",
+  outstandingMinor: "4500000",
   amountMeaning: "Premium due",
   type: "Insurance renewal",
   version: 1,
@@ -159,6 +161,7 @@ export const dashboard = {
   followupsWeek: 19,
   expectedRevenueMinor: "28450000",
   premiumDueMinor: "132000000",
+  premiumOverdueMinor: "0",
   won: 14,
   lost: 6,
   events,
@@ -212,7 +215,7 @@ export function response(path) {
         attention: 18,
       },
     };
-  if (path === "/clients") return { data: clients, meta: { total: 1248 } };
+  if (path === "/clients") return { data: clients, meta: { total: clients.length } };
   if (path.startsWith("/clients/"))
     return {
       data:
@@ -221,6 +224,16 @@ export function response(path) {
     };
   if (path === "/products/summary")
     return {
+      products: [
+        {
+          definitionId: definition.id,
+          clients: 4,
+          records: 4,
+          active: 4,
+          applications: 0,
+          closed: 0,
+        },
+      ],
       data: [
         { category: definition.category, clients: 4, records: 4, active: 4 },
       ],

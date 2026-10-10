@@ -632,11 +632,15 @@ export default function ClientProfile() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              await write.mutateAsync({
-                path: `/clients/${id}/notes`,
-                body: { body: note },
-              });
-              setNote("");
+              try {
+                await write.mutateAsync({
+                  path: `/clients/${id}/notes`,
+                  body: { body: note },
+                });
+                setNote("");
+              } catch {
+                /* FormError displays error */
+              }
             }}
           >
             <textarea
@@ -746,11 +750,15 @@ function RelationshipModal({
           e.preventDefault();
           if (!targetClientId) return;
           const f = new FormData(e.currentTarget);
-          await write.mutateAsync({
-            path: `/clients/${clientId}/relationships`,
-            body: Object.fromEntries(f),
-          });
-          onClose();
+          try {
+            await write.mutateAsync({
+              path: `/clients/${clientId}/relationships`,
+              body: Object.fromEntries(f),
+            });
+            onClose();
+          } catch {
+            /* FormError displays error */
+          }
         }}
       >
         <label>
