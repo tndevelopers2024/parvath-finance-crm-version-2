@@ -370,7 +370,12 @@ export default function Shell() {
                 </b>
               )}
             </button>
-            <div ref={accountRef} className="account">
+            <div
+              ref={accountRef}
+              className="account"
+              onMouseEnter={() => setAccount(true)}
+              onMouseLeave={() => setAccount(false)}
+            >
               <button
                 onClick={() => setAccount(!account)}
                 aria-expanded={account}

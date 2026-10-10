@@ -294,6 +294,11 @@ export function Pagination({
   onChange: (n: number) => void;
 }) {
   const pages = Math.max(1, Math.ceil(total / limit));
+  const start = Math.max(1, Math.min(page - 2, pages - 4));
+  const visiblePages = Array.from(
+    { length: Math.min(pages, 5) },
+    (_, index) => start + index,
+  );
   return (
     <div className="pagination">
       <span>
@@ -308,18 +313,35 @@ export function Pagination({
         >
           <ChevronLeft size={16} />
         </button>
-        {Array.from({ length: Math.min(pages, 5) }, (_, i) => i + 1).map(
+        {start > 1 && (
+          <>
+            <button aria-label="Page 1" onClick={() => onChange(1)}>1</button>
+            {start > 2 && <span aria-hidden="true">…</span>}
+          </>
+        )}
+        {visiblePages.map(
           (n) => (
             <button
               key={n}
               className={page === n ? "primary" : ""}
+              aria-label={`Page ${n}`}
+              aria-current={page === n ? "page" : undefined}
               onClick={() => onChange(n)}
             >
               {n}
             </button>
           ),
         )}
-        {pages > 5 && <span>… {pages}</span>}
+        {visiblePages[visiblePages.length - 1] < pages && (
+          <>
+            {visiblePages[visiblePages.length - 1] < pages - 1 && (
+              <span aria-hidden="true">…</span>
+            )}
+            <button aria-label={`Page ${pages}`} onClick={() => onChange(pages)}>
+              {pages}
+            </button>
+          </>
+        )}
         <button
           aria-label="Next page"
           disabled={page >= pages}

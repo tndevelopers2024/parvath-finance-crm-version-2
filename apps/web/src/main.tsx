@@ -52,7 +52,7 @@ const client = new QueryClient({
 });
 function Protected() {
   const q = useData("/auth/me");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading layout="workspace" />;
   if (q.error?.status === 401) return <Navigate to="/login" replace />;
   if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   return (
@@ -71,7 +71,7 @@ function App() {
     <ToastContext.Provider value={notify}>
       <CustomCursor />
       <SmoothScroll />
-      <Suspense fallback={<Loading />}>
+      <Suspense fallback={<Loading layout="workspace" />}>
         <Routes>
           <Route path="/login" element={<Auth />} />
           <Route path="/signup" element={<Auth mode="signup" />} />

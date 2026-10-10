@@ -1,8 +1,20 @@
 import "./skeleton.css";
 
-export type SkeletonLayout = "rows" | "dashboard" | "board" | "calendar" | "detail" | "form" | "inline";
+export type SkeletonLayout = "rows" | "dashboard" | "board" | "calendar" | "detail" | "form" | "inline" | "workspace";
 
 export default function Skeleton({ layout = "rows" }: { layout?: SkeletonLayout }) {
+  if (layout === "workspace") {
+    return (
+      <div className="workspace-loader" role="status" aria-live="polite">
+        <div className="workspace-loader-mark" aria-hidden="true">
+          <img src="/assets/logo.png" alt="" />
+        </div>
+        <p>Opening your workspace</p>
+        <span className="workspace-loader-caption">Parvath FinServ</span>
+        <div className="workspace-loader-progress" aria-hidden="true"><span /></div>
+      </div>
+    );
+  }
   const line = (className = "", key?: number) => <span key={key} className={`skeleton-block ${className}`} />;
   const rows = (count: number) => <div className="skeleton-rows">{Array.from({ length: count }, (_, i) => <div className="skeleton-row" key={i}>{line("skeleton-avatar")}<div className="skeleton-copy">{line("skeleton-title")}{line("skeleton-text")}</div>{line("skeleton-tag")}</div>)}</div>;
   const metrics = <div className="skeleton-metrics">{Array.from({ length: 4 }, (_, i) => <div className="skeleton-panel" key={i}>{line("skeleton-title")}{line("skeleton-number")}{line("skeleton-text")}</div>)}</div>;

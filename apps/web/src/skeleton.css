@@ -23,3 +23,62 @@ html.dark .skeleton-block::after { background: linear-gradient(90deg, transparen
 @keyframes skeleton-shimmer { to { transform: translateX(100%); } }
 @media (max-width: 700px) { .skeleton-columns, .skeleton-fields { grid-template-columns: minmax(0, 1fr); } .skeleton-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion: reduce) { .skeleton-block::after { animation: none; } }
+
+/* Keep the initial session check calm and centered, before the shell mounts. */
+.workspace-loader {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--color-background, var(--color-surface-soft));
+  color: var(--color-text);
+}
+.workspace-loader-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+}
+.workspace-loader-mark img { width: 40px; height: 40px; object-fit: contain; }
+.workspace-loader p { margin: 22px 0 6px; font-size: 16px; font-weight: 600; }
+.workspace-loader-caption { font-size: 12px; color: var(--color-muted); }
+.workspace-loader-progress {
+  width: 120px;
+  height: 3px;
+  margin-top: 24px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+.workspace-loader-progress span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--teal);
+  animation: workspace-loading 1.8s ease-in-out infinite;
+}
+@keyframes workspace-loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+.skeleton-block { background: color-mix(in srgb, var(--ws-line, var(--color-border)) 65%, transparent); }
+.skeleton-block::after { animation-duration: 2.4s; }
+.skeleton-panel { padding: 22px; border-radius: 14px; }
+.skeleton-row:last-child { border-bottom: 0; }
+.skeleton-row:nth-child(even) .skeleton-title { width: 58%; }
+.skeleton-row:nth-child(even) .skeleton-text { width: 65%; }
+.skeleton-dashboard .skeleton-metrics .skeleton-panel { min-height: 142px; }
+.skeleton-dashboard .skeleton-columns { grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); }
+@media (max-width: 700px) {
+  .skeleton-dashboard .skeleton-columns { grid-template-columns: minmax(0, 1fr); }
+  .skeleton-panel { padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-loader-progress span { animation: none; width: 100%; opacity: .6; }
+}

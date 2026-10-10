@@ -17,8 +17,8 @@ export interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
-  resolvedTheme: "dark",
+  theme: "system",
+  resolvedTheme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
 });
@@ -31,7 +31,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     "/forgot-password",
     "/reset-password",
   ].includes(pathname);
-  const [authTheme, setAuthTheme] = useState<Theme>("dark");
+  const [authTheme, setAuthTheme] = useState<Theme>("system");
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem("theme");
@@ -41,25 +41,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore local storage error */
     }
-    return "dark";
+    return "system";
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {
-    try {
-      if (systemOnly) {
-        return "dark";
-      }
-      const stored = localStorage.getItem("theme");
-      if (stored === "light" || stored === "dark") return stored;
-      if (stored === "system") {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-      }
-      return "dark";
-    } catch {
-      return "dark";
-    }
+    const preference = systemOnly ? authTheme : theme;
+    if (preference !== "system") return preference;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
   });
 
   const activeTheme = systemOnly ? authTheme : theme;

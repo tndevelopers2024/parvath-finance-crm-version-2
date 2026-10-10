@@ -12,7 +12,7 @@
           var t = localStorage.getItem("theme");
           var isDark =
             t === "dark" ||
-            (t === "system" &&
+            (t !== "light" && t !== "dark" &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (isDark) {
             document.documentElement.classList.add("dark");

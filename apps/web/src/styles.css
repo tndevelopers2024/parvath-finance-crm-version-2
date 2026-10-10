@@ -638,6 +638,14 @@ tbody tr:hover {
   right: 0;
   width: 280px;
 }
+.account-menu::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -16px;
+  height: 16px;
+}
 .account-search {
   position: relative;
   display: flex;
@@ -1260,9 +1268,15 @@ tbody tr:hover {
   align-items: center;
 }
 .pagination button {
-  padding: 7px;
-  min-width: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  min-width: 34px;
+  height: 34px;
   min-height: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
   border-color: var(--color-border);
   background: var(--color-surface-soft);
   font-size: 11px;
