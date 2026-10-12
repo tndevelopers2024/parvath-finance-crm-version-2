@@ -1,11 +1,11 @@
 {
-  "date": "2026-10-10T16:15:44.344Z",
-  "target": "http://localhost:5188",
-  "clientId": "6eea9570-0b1d-4dfd-835c-864750b2eb40",
-  "leadId": "b54c3e8e-acaf-4e8a-bda4-ccadab32009e",
-  "saleLeadId": "cdb5f31f-2bd6-47fe-8b10-b4fb80f9a90e",
-  "productId": "b5733564-95e6-4ede-be34-e85f5813c08f",
-  "eventId": "14ca9269-818f-4a21-8f05-d7bc9a61207d",
+  "date": "2026-10-12T05:31:17.431Z",
+  "target": "http://localhost:5177",
+  "clientId": "d4996956-3f49-4096-ac83-e5fe84f410f8",
+  "leadId": "1f473893-274b-4365-a62a-d2e86e3c1452",
+  "saleLeadId": "1f681d59-40b1-4d6b-b119-2254128748d4",
+  "productId": "b683016d-08f0-4924-b371-bd9a42e4af61",
+  "eventId": "18b8ad3d-3cc7-4e94-972e-3b62641055e1",
   "checks": [
     "Sign-in and authenticated navigation",
     "Empty name and phone are named, not shown as library text",

@@ -43,6 +43,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import Lenis from "lenis";
 import { api, date, initials, query, useData, useWrite } from "./api";
 import Skeleton, { type SkeletonLayout } from "./Skeleton";
 
@@ -317,6 +318,42 @@ export function InfiniteScroll({
     if (el && hasMore && !loadingMore && el.scrollHeight <= el.clientHeight + 4)
       onLoadMore();
   }, [shown, hasMore, loadingMore, onLoadMore]);
+
+  useEffect(() => {
+    const el = ref.current;
+    const content = el?.firstElementChild as HTMLElement | null;
+    if (!el || !content) return;
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+
+    const lenis = new Lenis({
+      wrapper: el,
+      content,
+      autoRaf: true,
+      lerp: 0.05,
+      duration: 1.8,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -7 * t)),
+      smoothWheel: true,
+      wheelMultiplier: 1.0,
+      touchMultiplier: 1.2,
+      syncTouch: true,
+      syncTouchLerp: 0.05,
+      touchInertiaExponent: 1.5,
+    });
+
+    lenis.on("scroll", () => {
+      if (
+        hasMore &&
+        !loadingMore &&
+        el.scrollHeight - el.scrollTop - el.clientHeight < 240
+      )
+        onLoadMore();
+    });
+
+    return () => {
+      lenis.destroy();
+    };
+  }, [hasMore, loadingMore, onLoadMore]);
   return (
     <div
       ref={ref}

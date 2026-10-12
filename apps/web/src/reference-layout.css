@@ -743,6 +743,14 @@ html.dark .app-shell.workspace-redesign .greeting {
   width: 40px;
   height: 40px;
 }
+.app-shell.workspace-redesign
+  .client-onboarding-popup
+  .onboard-avatar
+  .avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 13px;
+}
 @media (max-width: 700px) {
   .app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
     padding: 12px 18px;
