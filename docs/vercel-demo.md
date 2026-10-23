@@ -4,6 +4,17 @@ This configuration hosts the React frontend and Express API in one Vercel
 project. MongoDB stays on Atlas. Use synthetic demo data only. Vercel Hobby is
 for personal, non-commercial projects and has usage limits.
 
+The API runs in Mumbai (`bom1`), close to the current Atlas cluster (GCP
+`ASIA_SOUTH_1`). If the database moves, update `regions` in `vercel.json`.
+After authentication, the browser warms the main sections with two background
+requests at a time. It caches the dashboard, reference data and the first page
+of each list; full profiles start loading when their links are hovered or
+focused. More list pages remain available through scrolling. Data stays fresh
+for one minute and cached for up to 30 minutes while unused, with background
+refresh on later visits. Writes invalidate the cache. Login/logout clear it,
+and cancelled requests cannot repopulate the previous session's cache. No
+client records are persisted in browser storage.
+
 ## Import the repository
 
 Push these changes to your Git repository, then import it at

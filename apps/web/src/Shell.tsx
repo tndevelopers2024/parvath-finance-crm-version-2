@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, forgetCsrf, useData } from "./api";
+import { preloadWorkspace, prefetchWorkspaceRoute } from "./workspace-preload";
 import { Avatar, Loading, Modal, useAuth } from "./components";
 import ErrorBoundary from "./ErrorBoundary";
 import { Notifications } from "./Supporting";
@@ -52,6 +53,21 @@ export default function Shell() {
     navigate = useNavigate(),
     qc = useQueryClient(),
     { resolvedTheme, toggleTheme } = useTheme();
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void preloadWorkspace(qc, controller.signal);
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [qc, user.id, user.organizationId]);
+  const warmLink = (event: React.SyntheticEvent) => {
+    const link = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
+    if (!link || link.origin !== window.location.origin) return;
+    void prefetchWorkspaceRoute(qc, link.pathname + link.search);
+  };
   const [drawer, setDrawer] = useState(false),
     [search, setSearch] = useState(""),
     [searchOpen, setSearchOpen] = useState(false),
@@ -176,7 +192,11 @@ export default function Shell() {
       ? ["Add Follow-up", "/followups/new"]
       : ["Add Client", "/clients/new"];
   return (
-    <div className="app-shell workspace-redesign">
+    <div
+      className="app-shell workspace-redesign"
+      onPointerOver={warmLink}
+      onFocusCapture={warmLink}
+    >
       {drawer && (
         <button
           className="drawer-backdrop"

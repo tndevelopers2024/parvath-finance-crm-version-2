@@ -49,7 +49,11 @@ import "./summary-cards.css";
 import "./green-theme.css";
 const client = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 15000, refetchOnWindowFocus: false },
+    queries: {
+      staleTime: 60000,
+      gcTime: 30 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    },
   },
 });
 function Protected() {

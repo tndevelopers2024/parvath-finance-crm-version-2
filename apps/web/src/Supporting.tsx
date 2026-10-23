@@ -19,11 +19,11 @@ import {
   Users,
 } from "lucide-react";
 import {
-  api,
   date,
   query,
   rupees,
   useData,
+  broadcastClientsQueryOptions,
   useInfiniteData,
   useWrite,
 } from "./api";
@@ -615,25 +615,7 @@ function WhatsAppBroadcast() {
     const timer = setTimeout(() => setTerm(search.trim()), 250);
     return () => clearTimeout(timer);
   }, [search]);
-  const clients = useInfiniteQuery<any, Error>({
-    queryKey: ["broadcast-clients", term],
-    queryFn: ({ pageParam }) =>
-      api(
-        "/clients?" +
-          query({
-            q: term,
-            sort: "name",
-            direction: "asc",
-            limit: 100,
-            page: pageParam,
-          }),
-      ),
-    initialPageParam: 1,
-    getNextPageParam: (last: any) =>
-      last?.meta && last.meta.page * last.meta.limit < last.meta.total
-        ? last.meta.page + 1
-        : undefined,
-  });
+  const clients = useInfiniteQuery(broadcastClientsQueryOptions(term));
   const rows: Picked[] = (clients.data?.pages || []).flatMap(
     (page: any) => page?.data || [],
   );

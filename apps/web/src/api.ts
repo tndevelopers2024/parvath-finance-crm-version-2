@@ -99,12 +99,16 @@ export const query = (params: Record<string, unknown>) => {
   });
   return p.toString();
 };
+export const dataQueryOptions = (path: string) => ({
+  queryKey: [path],
+  queryFn: ({ signal }: { signal: AbortSignal }) => api(path, { signal }),
+  staleTime: path === "/auth/me" ? 15000 : 60000,
+  retry: (n: number, e: ApiError) => e.status >= 500 && n < 1,
+});
 export const useData = (path: string, enabled = true) => {
   const q = useQuery<any, ApiError>({
-    queryKey: [path],
-    queryFn: () => api(path),
+    ...dataQueryOptions(path),
     enabled,
-    retry: (n, e) => e.status >= 500 && n < 1,
   });
   // A failed background refetch keeps the last good data; do not report it as an error
   // so loaded pages (and unsaved forms) are not replaced by the error state.
@@ -114,24 +118,35 @@ export const useData = (path: string, enabled = true) => {
 };
 // Lists load in pages as the user scrolls. The result keeps the `data.data` and
 // `data.meta.total` shape of useData, so the rows render the same way.
+export const infiniteDataQueryOptions = (path: string, limit = 50) => ({
+  queryKey: [path, limit],
+  queryFn: ({
+    pageParam,
+    signal,
+  }: {
+    pageParam: unknown;
+    signal: AbortSignal;
+  }) =>
+    api(
+      path +
+        (/[?&]$/.test(path) ? "" : path.includes("?") ? "&" : "?") +
+        query({ limit, page: pageParam }),
+      { signal },
+    ),
+  initialPageParam: 1,
+  // Another page exists while fewer rows are loaded than the server's total.
+  getNextPageParam: (last: any, all: any[]) => {
+    const loaded = all.reduce((n, page) => n + (page?.data?.length || 0), 0);
+    const total = last?.meta?.total ?? 0;
+    return last?.data?.length && loaded < total ? all.length + 1 : undefined;
+  },
+  staleTime: 60000,
+  retry: (n: number, e: ApiError) => e.status >= 500 && n < 1,
+});
 export const useInfiniteData = (path: string, limit = 50, enabled = true) => {
   const q = useInfiniteQuery<any, ApiError>({
-    queryKey: [path, limit],
-    queryFn: ({ pageParam }) =>
-      api(
-        path +
-          (/[?&]$/.test(path) ? "" : path.includes("?") ? "&" : "?") +
-          query({ limit, page: pageParam }),
-      ),
-    initialPageParam: 1,
-    // Another page exists while fewer rows are loaded than the server's total.
-    getNextPageParam: (last: any, all: any[]) => {
-      const loaded = all.reduce((n, page) => n + (page?.data?.length || 0), 0);
-      const total = last?.meta?.total ?? 0;
-      return last?.data?.length && loaded < total ? all.length + 1 : undefined;
-    },
+    ...infiniteDataQueryOptions(path, limit),
     enabled,
-    retry: (n, e) => e.status >= 500 && n < 1,
   });
   const rows = (q.data?.pages || []).flatMap((page: any) => page?.data || []);
   const total =
@@ -141,7 +156,7 @@ export const useInfiniteData = (path: string, limit = 50, enabled = true) => {
   return {
     data,
     isPending: q.isPending,
-    error: q.error,
+    error: q.data ? null : q.error,
     refetch: q.refetch,
     hasMore: !!q.hasNextPage,
     loadingMore: q.isFetchingNextPage,
@@ -150,6 +165,13 @@ export const useInfiniteData = (path: string, limit = 50, enabled = true) => {
     },
   };
 };
+export const broadcastClientsQueryOptions = (term = "") => ({
+  ...infiniteDataQueryOptions(
+    "/clients?" + query({ q: term, sort: "name", direction: "asc" }),
+    100,
+  ),
+  queryKey: ["broadcast-clients", term],
+});
 export function useWrite() {
   const qc = useQueryClient();
   return useMutation({

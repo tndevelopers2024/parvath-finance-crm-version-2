@@ -46,7 +46,10 @@ export default function Auth({
         },
       );
       if (mode === "login") {
-        await qc.invalidateQueries();
+        // A new login must not inherit another account's cached records or
+        // wait for every stale query from the previous session to refetch.
+        await qc.cancelQueries();
+        qc.clear();
         // Return to where the session ended, but only to a path inside this app.
         const next = params.get("next") || "";
         navigate(/^\/(?![/\\])/.test(next) ? next : "/dashboard");
