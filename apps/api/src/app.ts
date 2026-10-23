@@ -228,7 +228,20 @@ app.use(
                 : err.message;
     if (status >= 500)
       logger.error(
-        { requestId: req.requestId, errorType: err.name, code: err.code },
+        {
+          requestId: req.requestId,
+          errorType: err.name,
+          code: err.code,
+          // Stack frames locate deployment-only failures without logging error
+          // messages, which may contain database values or other client data.
+          errorFrames:
+            typeof err.stack === "string"
+              ? err.stack
+                  .split("\n")
+                  .filter((line: string) => /^\s+at /.test(line))
+                  .slice(0, 8)
+              : undefined,
+        },
         "Request failed",
       );
     if (res.headersSent) return;
