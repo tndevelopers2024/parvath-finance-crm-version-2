@@ -1494,9 +1494,8 @@ function MemberManager() {
             </label>
             <label>
               Role
-              <select name="role" defaultValue="Administrator">
-                {/* For now, new members can only be added as Administrators. */}
-                <option>Administrator</option>
+              <select name="role" defaultValue="Operations">
+                {memberRoles.map((role) => <option key={role}>{role}</option>)}
               </select>
             </label>
             <label>

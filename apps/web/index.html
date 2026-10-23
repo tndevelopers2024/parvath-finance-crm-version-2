@@ -6,24 +6,7 @@
     <meta name="theme-color" content="#173f35" />
     <title>Parvath FinServ · Your Financial Partner</title>
     <link rel="icon" href="/assets/logo.png" />
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem("theme");
-          var isDark =
-            t === "dark" ||
-            (t !== "light" && t !== "dark" &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (isDark) {
-            document.documentElement.classList.add("dark");
-            document.documentElement.setAttribute("data-theme", "dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-            document.documentElement.setAttribute("data-theme", "light");
-          }
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -71,8 +71,7 @@ workflows.post("/members", permit("admin"), async (req, res) => {
     .object({
       name: z.string().trim().min(2).max(100),
       email: z.email().transform((s) => s.toLowerCase()),
-      // For now, new members can only be added as Administrators.
-      role: z.literal("Administrator"),
+      role: memberRole.default("Operations"),
       password: z.string().min(12).max(128),
     })
     .parse(req.body);

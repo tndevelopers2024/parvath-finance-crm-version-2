@@ -18,6 +18,7 @@ import { workflows } from "./workflows.js";
 import { reporting } from "./reporting.js";
 import { documents } from "./documents.js";
 import { HttpError, requestId, requireAuth } from "./security.js";
+import { MongoRateLimitStore } from "./rate-limit-store.js";
 export const logger = pino({
   level: config.NODE_ENV === "test" ? "silent" : "info",
   redact: [
@@ -40,7 +41,9 @@ export const isAllowedOrigin = (origin?: string, host?: string): boolean => {
   if (!origin) return true;
   if (
     config.NODE_ENV !== "production" &&
-    (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin))
+    /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(
+      origin,
+    )
   ) {
     return true;
   }
@@ -125,6 +128,7 @@ app.use(
   rateLimit({
     windowMs: 60000,
     limit: 600,
+    store: new MongoRateLimitStore("api"),
     standardHeaders: "draft-8",
     legacyHeaders: false,
     handler: (_req, _res, next) =>

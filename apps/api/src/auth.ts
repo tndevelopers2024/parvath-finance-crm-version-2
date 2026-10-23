@@ -7,11 +7,13 @@ import { db } from "./db.js";
 import { config } from "./config.js";
 import { HttpError, requireAuth } from "./security.js";
 import { integrations } from "./integrations.js";
+import { MongoRateLimitStore } from "./rate-limit-store.js";
 export const auth = Router();
 auth.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 100,
+    store: new MongoRateLimitStore("auth"),
     skip: (req) => req.method === "GET",
     standardHeaders: "draft-8",
     legacyHeaders: false,
@@ -29,9 +31,24 @@ auth.post(
   "/login",
   rateLimit({
     windowMs: 15 * 60 * 1000,
+    limit: 60,
+    store: new MongoRateLimitStore("login-ip"),
+    handler: (_req, _res, next) =>
+      next(
+        new HttpError(
+          429,
+          "Too many sign-in attempts. Please try again later.",
+        ),
+      ),
+  }),
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
     limit: 15,
-    // An office behind one address must not lock itself out by signing in normally.
-    skipSuccessfulRequests: true,
+    store: new MongoRateLimitStore("login-account"),
+    keyGenerator: (req) =>
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "invalid",
     handler: (_req, _res, next) =>
       next(
         new HttpError(
@@ -93,22 +110,29 @@ auth.patch("/account", requireAuth, async (req, res) => {
       newPassword: z.string().min(12).max(128).optional(),
     })
     .parse(req.body);
-  const u = await db.user.findUniqueOrThrow({ where: { id: req.auth.userId } });
-  if (!(await argon2.verify(u.passwordHash, v.currentPassword)))
-    throw new HttpError(400, "Current password is incorrect");
-  await db.user.update({
-    where: { id: u.id },
-    data: {
-      name: v.name,
-      ...(v.newPassword
-        ? { passwordHash: await argon2.hash(v.newPassword) }
-        : {}),
-    },
+  const passwordHash = v.newPassword
+    ? await argon2.hash(v.newPassword)
+    : undefined;
+  await db.transaction(async (tx) => {
+    const u = await tx.user.findUniqueOrThrow({
+      where: { id: req.auth.userId },
+    });
+    if (!(await argon2.verify(u.passwordHash, v.currentPassword)))
+      throw new HttpError(400, "Current password is incorrect");
+    await tx.user.update({
+      where: { id: u.id },
+      data: { name: v.name, ...(passwordHash ? { passwordHash } : {}) },
+    });
+    if (passwordHash) {
+      await tx.passwordReset.deleteMany({ where: { userId: u.id } });
+      await tx.native
+        .collection<any>("sessions")
+        .deleteMany(
+          { "session.userId": u.id, _id: { $ne: req.sessionID } },
+          { session: tx.session },
+        );
+    }
   });
-  if (v.newPassword)
-    await db.native
-      .collection<any>("sessions")
-      .deleteMany({ "session.userId": u.id, _id: { $ne: req.sessionID } });
   res.json({ data: { success: true } });
 });
 auth.post(
@@ -116,6 +140,7 @@ auth.post(
   rateLimit({
     windowMs: 3600000,
     limit: 5,
+    store: new MongoRateLimitStore("reset-ip"),
     handler: (_req, _res, next) =>
       next(
         new HttpError(429, "Too many reset requests. Please try again later."),
@@ -163,6 +188,7 @@ auth.post("/reset-password", async (req, res) => {
     })
     .parse(req.body);
   const hash = createHash("sha256").update(v.token).digest("hex");
+  const passwordHash = await argon2.hash(v.password);
   await db.transaction(async (tx) => {
     const reset = await tx.passwordReset.findUnique({
       where: { tokenHash: hash },
@@ -177,10 +203,11 @@ auth.post("/reset-password", async (req, res) => {
       throw new HttpError(409, "Reset link has already been used");
     await tx.user.update({
       where: { id: reset.userId },
-      data: { passwordHash: await argon2.hash(v.password) },
+      data: { passwordHash },
     });
+    await tx.passwordReset.deleteMany({ where: { userId: reset.userId } });
     await tx.native
-      .collection("sessions")
+      .collection<any>("sessions")
       .deleteMany({ "session.userId": reset.userId }, { session: tx.session });
   });
   res.json({ data: { success: true } });

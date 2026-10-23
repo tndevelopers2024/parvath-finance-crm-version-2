@@ -113,3 +113,11 @@ and the database location. No Railway endpoint is used by this Vercel setup.
 References: https://vercel.com/docs/functions/runtimes/node-js,
 https://vercel.com/docs/project-configuration/vercel-json,
 https://vercel.com/docs/plans/hobby.
+
+### Security controls
+
+Frontend security headers are configured in root `vercel.json`; the theme bootstrap is an external same-origin script so inline JavaScript is not required. Existing member roles are unchanged; new accounts default to Operations and administrators can explicitly choose another supported role.
+
+Rate limits use the MongoDB `rateLimits` collection across Vercel instances. The app creates its TTL index on first use; the database user needs permission to create that index. Counters expire automatically. Database failures fail closed rather than silently disabling limits. Login permits 60 attempts per IP and 15 per normalized account per 15 minutes, including successful logins. No additional service or credentials are required.
+
+Password changes and resets revoke all outstanding recovery links in the same transaction as the credential change. Concurrent changes conflict on the user document and retry with a fresh snapshot; other sessions are revoked as appropriate.

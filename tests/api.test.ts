@@ -1425,21 +1425,10 @@ describe("Authenticated MongoDB workflows", () => {
         })
       ).status,
     ).toBe(422);
-    // New members can only be Administrators for now, so the non-admin role is set afterwards.
-    expect(
-      (
-        await write("/members", {
-          name: "Role Check",
-          email,
-          role: "Adviser",
-          password,
-        })
-      ).status,
-    ).toBe(422);
     const created = await write("/members", {
       name: "Role Check",
       email,
-      role: "Administrator",
+      role: "Adviser",
       password,
     });
     expect(created.status).toBe(201);
@@ -1447,7 +1436,7 @@ describe("Authenticated MongoDB workflows", () => {
     try {
       const list = (await admin.get("/api/members")).body.data;
       const m = list.find((x: any) => x.user.id === userId);
-      expect(m.role).toBe("Administrator");
+      expect(m.role).toBe("Adviser");
       expect(m.user.active).toBe(true);
       expect(
         (await write("/members/" + m.id, { role: "Adviser" }, "patch")).status,
@@ -1914,6 +1903,19 @@ describe("Authenticated MongoDB workflows", () => {
       expect(r.body.error.message).toContain("closed");
     });
   });
+  it("password changes revoke outstanding recovery links", async () => {
+    const raw = randomUUID().replaceAll("-", "").repeat(2);
+    await db.passwordReset.create({ data: {
+      userId: owner, tokenHash: createHash("sha256").update(raw).digest("hex"),
+      expiresAt: new Date(Date.now() + 60000),
+    } });
+    // Keep the fixture password so subsequent integration cases can still sign in.
+    const response = await admin.patch("/api/auth/account").set("X-CSRF-Token", token)
+      .send({ name: "Administrator", currentPassword: password, newPassword: password });
+    expect(response.status, response.text).toBe(200);
+    expect(await db.passwordReset.count({ where: { userId: owner } })).toBe(0);
+    expect((await admin.get("/api/auth/me")).status).toBe(200);
+  });
   it("password reset is single-use and revokes existing sessions", async () => {
     const resetToken =
       randomUUID().replaceAll("-", "") + randomUUID().replaceAll("-", "");
@@ -1924,6 +1926,11 @@ describe("Authenticated MongoDB workflows", () => {
         expiresAt: new Date(Date.now() + 60000),
       },
     });
+    const secondToken = randomUUID().replaceAll("-", "").repeat(2);
+    await db.passwordReset.create({ data: {
+      userId: opsId, tokenHash: createHash("sha256").update(secondToken).digest("hex"),
+      expiresAt: new Date(Date.now() + 60000),
+    } });
     const guest = request.agent(app);
     const csrf = (await guest.get("/api/auth/csrf")).body.data.csrf;
     const r = await guest
@@ -1931,6 +1938,8 @@ describe("Authenticated MongoDB workflows", () => {
       .set("X-CSRF-Token", csrf)
       .send({ token: resetToken, password: "Replacement-" + randomUUID() });
     expect(r.status, r.text).toBe(200);
+    expect((await guest.post("/api/auth/reset-password").set("X-CSRF-Token", csrf)
+      .send({ token: secondToken, password: "Another-" + randomUUID() })).status).toBe(400);
     expect((await ops.get("/api/auth/me")).status).toBe(401);
     expect(
       (
