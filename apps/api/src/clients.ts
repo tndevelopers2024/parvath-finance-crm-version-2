@@ -7,6 +7,9 @@ import {
   withoutUnchanged,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
+import { syncImportantDateJobs } from "./important-dates.js";
+import { assertContactAllowed } from "./contact-policy.js";
+import { fromZonedTime } from "date-fns-tz";
 import type { Database } from "./persistence/repository.js";
 
 async function lockContactChanges(tx: Database, organizationId: string) {
@@ -139,19 +142,53 @@ export async function createClient(
       : { include: clientInclude }),
   });
   const followup = v.onboardingProfile?.initialFollowup;
+  const timezone = v.onboardingProfile
+    ? (await tx.organization.findUniqueOrThrow({ where: { id: org } })).timezone
+    : "Asia/Kolkata";
   if (followup?.enabled && followup.date && followup.notes) {
+    const profile = v.onboardingProfile!;
+    const hour = profile.preferredTime?.startsWith("Evening")
+      ? "18"
+      : profile.preferredTime?.startsWith("Afternoon")
+        ? "12"
+        : !profile.preferredTime &&
+            profile.noCallsDuringHours &&
+            (!followup.channel || followup.channel === "Call")
+          ? "18"
+          : "10";
+    const dueAt = fromZonedTime(`${followup.date}T${hour}:00:00`, timezone);
+    assertContactAllowed(
+      { onboardingJson: d.client.onboardingJson },
+      followup.channel || "Call",
+      dueAt,
+      timezone,
+    );
     await tx.followUp.create({
       data: {
         organizationId: org,
         clientId: created.id,
         ownerId: owner,
-        dueAt: new Date(`${followup.date}T10:00:00+05:30`),
+        dueAt,
         channel: followup.channel || "Call",
         priority: "Normal",
         notes: followup.notes,
       },
     });
   }
+  if (
+    v.onboardingProfile?.weddingDate ||
+    v.onboardingProfile?.importantDates?.length
+  )
+    await syncImportantDateJobs(
+      tx,
+      {
+        id: created.id,
+        organizationId: org,
+        ownerId: owner,
+        onboardingJson: d.client.onboardingJson,
+      },
+      timezone,
+    );
   return created;
 }
 clients.get("/", async (req, res) => {
@@ -598,6 +635,8 @@ clients.patch("/:id", permit("edit"), async (req, res) => {
       ...v.onboardingProfile,
     };
   const d = clientData(v);
+  if (v.onboardingProfile === undefined)
+    d.client.onboardingJson = old.onboardingJson;
   const original = await db.contact.findUniqueOrThrow({
     where: { id: old.contactId },
   });
@@ -660,6 +699,12 @@ clients.patch("/:id", permit("edit"), async (req, res) => {
         });
       }
     }
+    if (v.onboardingProfile)
+      await syncImportantDateJobs(
+        tx,
+        { ...old, onboardingJson: d.client.onboardingJson },
+        req.auth.timezone,
+      );
     await audit(tx, req, "update", "Client", old.id, "Client details updated");
     return tx.client.findUniqueOrThrow({
       where: { id: old.id },
@@ -744,6 +789,14 @@ clients.delete("/:id", permit("edit"), async (req, res) => {
     await tx.business.deleteMany({ where: { contactId: c.contactId } });
 
     // 7. Client and Contact
+    await tx.native.collection("Job").deleteMany(
+      {
+        organizationId: req.auth.organizationId,
+        type: "important-date",
+        "payload.clientId": c.id,
+      },
+      { session: tx.session },
+    );
     await tx.client.delete({ where: { id: c.id } });
     await tx.contact.delete({ where: { id: c.contactId } });
     await tx.native

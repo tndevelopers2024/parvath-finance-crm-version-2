@@ -511,6 +511,9 @@
                     "description": {
                       "type": "string",
                       "maxLength": 1000
+                    },
+                    "repeatAnnually": {
+                      "type": "boolean"
                     }
                   }
                 }

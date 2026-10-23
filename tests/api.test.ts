@@ -1973,6 +1973,23 @@ describe("Authenticated MongoDB workflows", () => {
       ["negative savings", { onboardingProfile: { monthlySavings: "-500" } }],
       ["text savings", { onboardingProfile: { totalSavings: "abc" } }],
       [
+        "negative sum assured",
+        { onboardingProfile: { policies: [{ sumAssured: "-1" }] } },
+      ],
+      [
+        "text loan amount",
+        { onboardingProfile: { loans: [{ amount: "abc" }] } },
+      ],
+      [
+        "negative outstanding",
+        { onboardingProfile: { loans: [{ outstanding: "-50" }] } },
+      ],
+      ["negative EMI", { onboardingProfile: { loans: [{ emi: "-10" }] } }],
+      [
+        "text investment",
+        { onboardingProfile: { investments: [{ amount: "abc" }] } },
+      ],
+      [
         "future spouse birth date",
         { onboardingProfile: { spouseDob: "2999-01-01" } },
       ],
@@ -2012,6 +2029,9 @@ describe("Authenticated MongoDB workflows", () => {
         spouseDob: "",
         clientSince: "",
         children: [{ name: "Child", dob: "" }],
+        policies: [{ sumAssured: "₹ 50,00,000" }],
+        loans: [{ amount: "100000", outstanding: "0", emi: "2500.50" }],
+        investments: [{ amount: "Rs. 25,000" }],
       },
     });
     expect(ok.status, ok.text).toBe(201);
@@ -2030,6 +2050,7 @@ describe("Authenticated MongoDB workflows", () => {
       pinCode: "n/a",
       monthlySavings: "about 5k",
       maritalStatus: "Married",
+      policies: [{ name: "Legacy policy", sumAssured: "about 5 lakh" }],
     };
     await db.client.update({
       where: { id },
@@ -2066,6 +2087,24 @@ describe("Authenticated MongoDB workflows", () => {
     expect(changed.status, changed.text).toBe(422);
     const stored = (await admin.get(`/api/clients/${id}`)).body.data;
     expect(stored.onboardingProfile.dependents).toBe("two");
+    const invalidPolicy = await write(
+      `/clients/${id}`,
+      {
+        name: stored.name,
+        phone: stored.phone,
+        version: stored.version,
+        onboardingProfile: {
+          ...stored.onboardingProfile,
+          policies: [{ sumAssured: "-500" }],
+        },
+      },
+      "patch",
+    );
+    expect(invalidPolicy.status, invalidPolicy.text).toBe(422);
+    expect(
+      (await admin.get(`/api/clients/${id}`)).body.data.onboardingProfile
+        .policies,
+    ).toEqual(legacy.policies);
   });
   it("pages each lead stage separately with totals for the whole matching set", async () => {
     const holder = await write("/clients", {

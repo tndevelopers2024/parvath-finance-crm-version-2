@@ -6,6 +6,11 @@ import { config } from "./config.js";
 import { now } from "./domain.js";
 import { s3 } from "./documents.js";
 import pino from "pino";
+import {
+  dateOccasions,
+  refreshImportantDateJobs,
+  syncImportantDateJobs,
+} from "./important-dates.js";
 const log = pino({ level: config.NODE_ENV === "test" ? "silent" : "info" });
 export async function runJob() {
   const leaseToken = randomUUID();
@@ -76,7 +81,50 @@ export async function runJob() {
           data: { state: event ? "completed" : "cancelled" },
         });
       });
-    else if (job.type === "scan") {
+    else if (job.type === "important-date") {
+      await db.transaction(async (tx) => {
+        const current = await tx.job.findUniqueOrThrow({
+          where: { id: job.id },
+        });
+        if (current.state !== "processing" || current.leaseToken !== leaseToken)
+          return;
+        const client = await tx.client.findFirst({
+          where: {
+            id: job.payload.clientId,
+            organizationId: job.organizationId,
+          },
+          include: { contact: true },
+        });
+        const end = new Date(job.payload.date + "T00:00:00Z");
+        end.setUTCDate(end.getUTCDate() + 1);
+        const occasion =
+          client &&
+          dateOccasions(
+            client.onboardingJson ? JSON.parse(client.onboardingJson) : {},
+            job.payload.date,
+            end.toISOString().slice(0, 10),
+          ).find((r) => r.key === job.payload.occasionKey);
+        if (occasion) {
+          await tx.notification.upsert({
+            where: { id: job.id },
+            create: {
+              id: job.id,
+              organizationId: job.organizationId,
+              userId: client!.ownerId,
+              title: `${occasion.title}: ${client!.contact.name} · ${occasion.date}`,
+              link: `/clients/${client!.id}`,
+            },
+            update: {},
+          });
+        }
+        await tx.job.update({
+          where: { id: job.id },
+          data: { state: occasion ? "completed" : "cancelled" },
+        });
+        if (client && occasion)
+          await syncImportantDateJobs(tx, client, job.payload.timezone);
+      });
+    } else if (job.type === "scan") {
       if (!config.CLAMAV_HOST) throw new Error("SCANNER_NOT_CONFIGURED");
       const doc = await db.document.findFirstOrThrow({
         where: {
@@ -154,10 +202,15 @@ export async function runJob() {
 // Polls until the returned stop function is called; stop resolves once the current job has finished.
 export function startWorker() {
   let stopping = false;
+  let lastDateRefresh = 0;
   const done = (async () => {
     while (!stopping) {
       let worked = false;
       try {
+        if (Date.now() - lastDateRefresh > 86400000) {
+          await refreshImportantDateJobs();
+          lastDateRefresh = Date.now();
+        }
         worked = await runJob();
       } catch {
         // A transient database error must not end the loop; wait and poll again.

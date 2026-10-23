@@ -76,6 +76,19 @@ export default function CalendarPage() {
       completed: r.state === "completed",
       cancelled: r.state === "cancelled",
     })),
+    ...(d.importantDates || []).map((r: any) => ({
+      id: "occasion-" + r.id,
+      kind: "Important dates",
+      day: r.date,
+      name: r.name,
+      details: r.title,
+      status: "Reminder",
+      href: "/clients/" + r.clientId,
+      clientId: r.clientId,
+      clock: "All day",
+      completed: false,
+      cancelled: false,
+    })),
     ...(d.birthdayCalendar || [])
       .filter((r: any) => r.id)
       .map((r: any) => ({
@@ -110,7 +123,7 @@ export default function CalendarPage() {
     <div className="dedicated-calendar apple-calendar">
       <PageHeading
         title="Calendar"
-        subtitle="Plan client conversations, track renewals, and remember birthdays."
+        subtitle="Plan conversations, track renewals, birthdays and important dates."
         actions={
           <Link className="button primary" to="/followups/new">
             <Plus size={16} />
@@ -161,7 +174,13 @@ export default function CalendarPage() {
           <aside className="apple-calendar-sidebar">
             <h3>Calendars</h3>
             <Tabs
-              items={["All", "Renewals", "Follow-ups", "Birthdays"]}
+              items={[
+                "All",
+                "Renewals",
+                "Follow-ups",
+                "Birthdays",
+                "Important dates",
+              ]}
               value={filter}
               onChange={setFilter}
             />
@@ -169,7 +188,11 @@ export default function CalendarPage() {
               {monthItems.length} activities this month ·{" "}
               {
                 monthItems.filter(
-                  (r) => !r.completed && !r.cancelled && r.day < d.today,
+                  (r) =>
+                    ["Renewals", "Follow-ups"].includes(r.kind) &&
+                    !r.completed &&
+                    !r.cancelled &&
+                    r.day < d.today,
                 ).length
               }{" "}
               overdue

@@ -150,7 +150,7 @@ function Checks({
   );
 }
 
-type Row = Record<string, string | undefined>;
+type Row = Record<string, string | boolean | undefined>;
 function Rows({
   columns,
   rows,
@@ -180,7 +180,7 @@ function Rows({
       {rows.map((row, index) => (
         <div className="onboard-row" key={index}>
           {columns.map((c) => {
-            const put = (value: string) =>
+            const put = (value: string | boolean) =>
               onChange(
                 rows.map((item, i) =>
                   i === index ? { ...item, [c.key]: value } : item,
@@ -198,16 +198,23 @@ function Rows({
                 {c.type === "date" ? (
                   <DateField
                     aria-label={`${c.label} ${index + 1}`}
-                    value={row[c.key] || ""}
+                    value={String(row[c.key] || "")}
                     max={c.max}
                     error={error}
                     onChange={put}
+                  />
+                ) : c.type === "checkbox" ? (
+                  <input
+                    type="checkbox"
+                    aria-label={`${c.label} ${index + 1}`}
+                    checked={!!row[c.key]}
+                    onChange={(e) => put(e.target.checked)}
                   />
                 ) : (
                   <input
                     aria-label={`${c.label} ${index + 1}`}
                     type={c.type || "text"}
-                    value={row[c.key] || ""}
+                    value={String(row[c.key] || "")}
                     aria-invalid={!!error}
                     onChange={(e) => put(e.target.value)}
                   />
@@ -670,11 +677,20 @@ export function Preferences({ profile, setProfile, form, errors = {} }: Props) {
       </div>
       <div>
         <Section title="Important Dates">
+          <p className="onboard-help">
+            Dates appear in the calendar and remind the client owner at 9 AM in
+            the workspace timezone. Wedding anniversaries repeat yearly.
+          </p>
           <Rows
             columns={[
               { key: "type", label: "Type" },
               { key: "date", label: "Date", type: "date" },
               { key: "description", label: "Description" },
+              {
+                key: "repeatAnnually",
+                label: "Repeat yearly",
+                type: "checkbox",
+              },
             ]}
             rows={profile.importantDates || []}
             name="importantDates"
@@ -717,6 +733,11 @@ export function Preferences({ profile, setProfile, form, errors = {} }: Props) {
             />
           </Section>
           <Section title="Contact Restrictions">
+            <p className="onboard-help">
+              Working hours are Monday–Friday, 9 AM–6 PM in the workspace
+              timezone. These restrictions and preferred contact days/times
+              apply when opening conversations or scheduling follow-ups.
+            </p>
             <label className="onboard-inline">
               <input
                 type="checkbox"
@@ -886,6 +907,11 @@ export function ReviewSummary({
               </label>
               {profile.initialFollowup?.enabled && (
                 <div className="onboard-fields two-columns">
+                  <p className="onboard-help">
+                    The first follow-up uses the preferred contact window (10 AM
+                    by default, noon for afternoon, 6 PM for evening or calls
+                    outside working hours), in the workspace timezone.
+                  </p>
                   <Text
                     label="Follow-up Date"
                     type="date"

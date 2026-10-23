@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-21T13:32:28.579Z",
+  "results": [
+    {
+      "suite": "sweep",
+      "exitCode": 0
+    },
+    {
+      "suite": "fields",
+      "exitCode": 0
+    }
+  ],
+  "cleaned": true
+}

@@ -8,6 +8,9 @@ The current local workspace runs on a dedicated MongoDB replica set and contains
 
 ## Runtime and setup
 
+For a Vercel demo deployment of both the frontend and API without Railway,
+see [the Vercel demo guide](docs/vercel-demo.md). Import the repository root.
+
 - Node **24.11+ / 24.x**, verified with 24.19.0.
 - MongoDB Atlas replica set/sharded cluster, or local MongoDB **8.x replica set**; verified locally with 8.2.7.
 - Exact package versions are in the committed lockfile. MongoDB driver 7.6.0, connect-mongo 6.0.0.

@@ -4,6 +4,8 @@ import { Decimal128 } from "mongodb";
 import { z } from "zod";
 import { db } from "./db.js";
 import { schema } from "./persistence/schema.js";
+import { assertContactAllowed } from "./contact-policy.js";
+import { dateOccasions } from "./important-dates.js";
 import { sendWhatsAppTemplate, whatsappConfigured } from "./whatsapp.js";
 import { audit, HttpError, owned, permit } from "./security.js";
 import {
@@ -478,6 +480,24 @@ reporting.get("/dashboard", async (req, res) => {
     timing: timing(f, tz),
   }));
   const birthdayIds: string[] = (facet.today ?? []).map((b: any) => b.id);
+  const occasionClients = await db.client.findMany({
+    where: {
+      organizationId: org,
+      OR: [
+        { onboardingJson: { contains: '"weddingDate"' } },
+        { onboardingJson: { contains: '"importantDates"' } },
+      ],
+    },
+    include: { contact: true },
+  });
+  const importantDates = occasionClients.flatMap((client) =>
+    dateOccasions(JSON.parse(client.onboardingJson!), from, to).map((row) => ({
+      ...row,
+      id: `${client.id}:${row.key}:${row.date}`,
+      clientId: client.id,
+      name: client.contact.name,
+    })),
+  );
   const birthdayClients = birthdayIds.length
     ? await db.client.findMany({
         where: { organizationId: org, id: { in: birthdayIds } },
@@ -520,6 +540,7 @@ reporting.get("/dashboard", async (req, res) => {
           phone,
           monthDay,
         })),
+      importantDates: importantDates.slice(0, CALENDAR_ROW_LIMIT),
       staleClients: facet.stale?.[0]?.n ?? 0,
       activity,
       bins,
@@ -531,6 +552,7 @@ reporting.get("/dashboard", async (req, res) => {
         birthdayCalendar: (facet.calendar ?? []).length > CALENDAR_ROW_LIMIT,
         leads: leadCount((s) => open(s)) > LEAD_ROW_LIMIT,
         birthdays: birthdayIds.length >= BIRTHDAY_ROW_LIMIT,
+        importantDates: importantDates.length > CALENDAR_ROW_LIMIT,
       },
     },
   });
@@ -720,7 +742,14 @@ reporting.post("/whatsapp/broadcasts", permit("operate"), async (req, res) => {
     if (!to) skipped.push({ ...target, reason: "No phone number" });
     else if (consented.get(client.id) !== true)
       skipped.push({ ...target, reason: "No WhatsApp consent" });
-    else recipients.push({ ...target, to });
+    else {
+      try {
+        assertContactAllowed(row, "WhatsApp", now(), req.auth.timezone);
+        recipients.push({ ...target, to });
+      } catch (error) {
+        skipped.push({ ...target, reason: (error as Error).message });
+      }
+    }
   }
   const results: {
     clientId: string;
@@ -808,7 +837,9 @@ reporting.post("/communications", permit("operate"), async (req, res) => {
       body: z.string().max(3000).optional(),
     })
     .parse(req.body);
-  await owned("client", v.clientId, req);
+  const client = await owned("client", v.clientId, req);
+  if (v.event === "Conversation opened")
+    assertContactAllowed(client, v.channel, now(), req.auth.timezone);
   const c = await db.transaction(async (tx) => {
     const row = await tx.communication.create({
       data: { ...v, actorId: req.auth.userId, createdAt: now() },

@@ -18,7 +18,8 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     fileParallelism: false,
-    testTimeout: 20000,
+    // Integration cases include many sequential Atlas round trips (imports and session checks).
+    testTimeout: 120000,
     hookTimeout: 30000,
   },
 });

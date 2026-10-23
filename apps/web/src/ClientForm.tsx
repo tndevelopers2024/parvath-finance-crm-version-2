@@ -169,8 +169,14 @@ export default function ClientForm({
     });
   }, [embedded, step, sectionIndex, sectionTitles]);
   const photoInput = useRef<HTMLInputElement>(null);
+  const storage = user.integrations?.documents;
+  const uploadBlocked = storage?.available === false;
+  const [photoError, setPhotoError] = useState("");
   const form = useForm<ClientInput>({
-    resolver: zodResolver(clientSchema) as any,
+    // Profile state is validated separately against only the changed values on save.
+    resolver: zodResolver(
+      clientSchema.omit({ onboardingProfile: true }),
+    ) as any,
     mode: "onTouched",
     defaultValues: {
       name: "",
@@ -338,6 +344,9 @@ export default function ClientForm({
         },
       });
       localStorage.removeItem(draftKey);
+      let saveMessage = id
+        ? "Client details updated"
+        : "Client created successfully";
       if (photo) {
         const body = new FormData();
         body.append("file", photo);
@@ -348,10 +357,11 @@ export default function ClientForm({
             body,
           });
         } catch (e) {
-          toast("Client saved. Photo upload: " + (e as Error).message);
+          saveMessage =
+            "Client saved, but photo upload failed: " + (e as Error).message;
         }
       }
-      toast(id ? "Client details updated" : "Client created successfully");
+      toast(saveMessage);
       navigate(
         id
           ? "/clients/" + result.data.id
@@ -774,18 +784,49 @@ export default function ClientForm({
                       <strong>Profile Photo</strong>
                       <button
                         type="button"
+                        disabled={uploadBlocked}
+                        title={uploadBlocked ? storage.message : undefined}
                         onClick={() => photoInput.current?.click()}
                       >
                         <Upload size={16} />{" "}
                         {photo ? photo.name : "Upload Photo"}
                       </button>
                       <small>JPG or PNG, maximum 10 MB</small>
+                      {uploadBlocked && (
+                        <p className="integration-note" role="status">
+                          {storage.message}
+                        </p>
+                      )}
+                      {photoError && (
+                        <small className="field-error" role="alert">
+                          {photoError}
+                        </small>
+                      )}
                       <input
                         ref={photoInput}
                         hidden
                         type="file"
+                        disabled={uploadBlocked}
                         accept="image/jpeg,image/png"
-                        onChange={(e) => setPhoto(e.target.files?.[0])}
+                        onChange={(e) => {
+                          const selected = e.target.files?.[0];
+                          setPhoto(undefined);
+                          setPhotoError("");
+                          if (!selected) return;
+                          if (
+                            !["image/jpeg", "image/png"].includes(
+                              selected.type,
+                            ) ||
+                            selected.size > 10 * 1024 * 1024
+                          ) {
+                            setPhotoError(
+                              "Choose a JPG or PNG photo up to 10 MB.",
+                            );
+                            e.target.value = "";
+                            return;
+                          }
+                          setPhoto(selected);
+                        }}
                       />
                     </div>
                   </div>

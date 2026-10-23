@@ -55,6 +55,8 @@ Reminder: `{runAt}` to `/renewals/{id}/reminder`. This schedules an in-app remin
 
 ## Follow-ups and communication
 
+Contact restrictions are enforced server-side: `onboardingProfile.whatsappOnly`, `noCallsDuringHours`, `preferredTime` and `bestDay` apply to opening a conversation and scheduling any follow-up, including lead-generated, initial and next follow-ups. Working hours are Monday–Friday 09:00–18:00 in the workspace timezone. A violation returns 422 with the reason. Historical outcomes and message drafts remain recordable. Broadcast recipients outside their allowed day/time are returned in `skipped`.
+
 `GET /followups` accepts `range`, `channel`, `clientId`, `q` and pagination, plus optional `from` and `to` (`YYYY-MM-DD`, inclusive, either one alone). They are workspace calendar days (Asia/Kolkata) matched against the `dueAt` instant, and narrow the other filters; an invalid date is 422 and `from` after `to` is 400.
 
 Create follow-up: `{clientId,ownerId,channel,dueAt,priority,notes,opportunityId?,productId?,eventId?}`. Optional links must belong to the same client and workspace. PATCH edits/reschedules pending tasks with `version`.
@@ -63,7 +65,13 @@ Complete/cancel: `{version,state:'completed'|'cancelled',outcome,nextDueAt?}`. O
 
 Communication events accept `{clientId,channel,event,body?}` where event is Conversation opened, Message prepared, or Manual outcome. The API does not accept an unverified sent/delivered/replied event. A deep link cannot complete a task.
 
-## Documents
+## Important dates
+
+`onboardingProfile.importantDates` accepts rows `{type?,date?,description?,repeatAnnually?}`. Custom dates are one-time unless `repeatAnnually` is true; `weddingDate` repeats yearly. `GET /dashboard?from=YYYY-MM-DD&to=YYYY-MM-DD` includes `data.importantDates` containing `{id,clientId,name,date,title,key}`, with an exclusive end date and a 2,000-row cap indicated by `truncated.importantDates`. Occurrences before the original date are excluded; February 29 annual dates clamp to February 28 in other years.
+
+Saving client profiles schedules durable in-app notifications for the owner at 09:00 in the workspace timezone. Date changes/removal cancel obsolete pending jobs; successful jobs deduplicate by occurrence and extend yearly schedules. Existing profiles are backfilled by the worker. See [operations](operations.md#contact-preferences-and-important-dates). Omitting `onboardingProfile` in a client edit preserves it; an explicit empty profile clears its stored dates/preferences.
+
+## Document uploads
 
 `POST /clients/{id}/documents`: multipart field `file`, optional `purpose=Photo`. Allowed signatures/extensions: PDF, PNG, JPEG; 10 MB maximum; photos must be images. Storage missing returns 503. Successful storage creates quarantined metadata and a durable scan job. `GET /documents/{id}/download` is session-authorized controlled streaming, returns 409 until clean, and never exposes a public object URL.
 

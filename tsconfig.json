@@ -11,6 +11,7 @@
     "rootDir": "."
   },
   "include": [
+    "api/**/*.ts",
     "apps/api/src/**/*.ts",
     "packages/**/*.ts",
     "tests/**/*.ts",

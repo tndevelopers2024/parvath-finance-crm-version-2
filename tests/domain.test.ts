@@ -164,6 +164,28 @@ describe("Domain boundaries", () => {
 });
 
 describe("Client onboarding validation", () => {
+  it.each([
+    ["policies", "sumAssured"],
+    ["loans", "amount"],
+    ["loans", "outstanding"],
+    ["loans", "emi"],
+    ["investments", "amount"],
+  ])("validates money in %s.%s with a row-specific error", (group, field) => {
+    for (const value of ["-1", "abc", "1.234", "₹ -500", "Infinity"]) {
+      const result = onboardingProfileSchema.safeParse({
+        [group]: [{ [field]: value }],
+      });
+      expect(result.success, value).toBe(false);
+      if (!result.success)
+        expect(result.error.issues[0].path).toEqual([group, 0, field]);
+    }
+    for (const value of ["", "0", "25000.50", "₹ 25,000", "Rs. 3,00,000.50"])
+      expect(
+        onboardingProfileSchema.safeParse({ [group]: [{ [field]: value }] })
+          .success,
+        value,
+      ).toBe(true);
+  });
   it("rejects negative and fractional dependent counts", () => {
     for (const dependents of ["-2", "1.5", "abc"]) {
       expect(onboardingProfileSchema.safeParse({ dependents }).success).toBe(

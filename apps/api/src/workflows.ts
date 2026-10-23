@@ -13,6 +13,7 @@ import {
   stages,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
+import { assertContactAllowed } from "./contact-policy.js";
 import {
   audit,
   holdClient,
@@ -419,6 +420,13 @@ workflows.post("/leads", permit("edit"), async (req, res) => {
   await validOwner(v.ownerId, req);
   const row = await db.transaction(async (tx) => {
     await holdClient(tx, v.clientId, req);
+    if (v.nextFollowUp)
+      assertContactAllowed(
+        await tx.client.findUniqueOrThrow({ where: { id: v.clientId } }),
+        "Call",
+        new Date(v.nextFollowUp),
+        req.auth.timezone,
+      );
     const o = await tx.opportunity.create({
       data: {
         ...v,
@@ -1528,7 +1536,8 @@ workflows.get("/followups", async (req, res) => {
 });
 workflows.post("/followups", permit("operate"), async (req, res) => {
   const v = followupSchema.parse(req.body);
-  await owned("client", v.clientId, req);
+  const client = await owned("client", v.clientId, req);
+  assertContactAllowed(client, v.channel, new Date(v.dueAt), req.auth.timezone);
   await validOwner(v.ownerId, req);
   for (const [field, model] of [
     ["opportunityId", "opportunity"],
@@ -1590,6 +1599,12 @@ workflows.patch("/followups/:id", permit("operate"), async (req, res) => {
   if (f.state !== "pending")
     throw new HttpError(409, "Only pending follow-ups can be edited");
   await validOwner(v.ownerId, req, f.ownerId);
+  assertContactAllowed(
+    await owned("client", f.clientId, req),
+    v.channel,
+    new Date(v.dueAt),
+    req.auth.timezone,
+  );
   const { version, ...data } = v;
   const r = await db.transaction(async (tx) => {
     const change = await tx.followUp.updateMany({
@@ -1629,6 +1644,13 @@ workflows.post(
         nextDueAt: z.iso.datetime().optional(),
       })
       .parse(req.body);
+    if (v.nextDueAt)
+      assertContactAllowed(
+        await owned("client", f.clientId, req),
+        f.channel,
+        new Date(v.nextDueAt),
+        req.auth.timezone,
+      );
     const result = await db.transaction(async (tx) => {
       if (f.state === v.state) return f;
       if (f.state !== "pending")

@@ -1,0 +1,76 @@
+{
+  "checks": [
+    "maritalStatus",
+    "spouseName",
+    "dependents",
+    "companyName",
+    "designation",
+    "professionalIndustry",
+    "experience",
+    "pinCode",
+    "referredBy",
+    "spouseDob",
+    "weddingDate",
+    "clientSince",
+    "sameAddress",
+    "permanentAddress",
+    "clientCategory",
+    "children",
+    "investmentHorizon",
+    "monthlySavings",
+    "totalSavings",
+    "financialGoals",
+    "policies",
+    "loans",
+    "investments",
+    "communicationChannels",
+    "preferredTime",
+    "bestDay",
+    "language",
+    "engagementTopics",
+    "interests",
+    "noCallsDuringHours",
+    "whatsappOnly",
+    "importantDates",
+    "name",
+    "phone",
+    "email",
+    "occupation",
+    "gender",
+    "address",
+    "city",
+    "state",
+    "source",
+    "annualIncome",
+    "riskProfile",
+    "preferredContact",
+    "dob"
+  ],
+  "findings": [
+    {
+      "field": "policy sum assured",
+      "status": 201,
+      "accepted": true
+    },
+    {
+      "field": "loan amount",
+      "status": 201,
+      "accepted": true
+    },
+    {
+      "field": "investment amount",
+      "status": 201,
+      "accepted": true
+    },
+    {
+      "field": "wedding date in future",
+      "status": 201,
+      "accepted": true
+    },
+    {
+      "field": "photo upload",
+      "status": 503,
+      "visibleToast": "Client details updated\n×"
+    }
+  ]
+}

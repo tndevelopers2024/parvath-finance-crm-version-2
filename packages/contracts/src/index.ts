@@ -155,7 +155,7 @@ export const onboardingProfileSchema = z.object({
         type: onboardingText,
         provider: onboardingText,
         name: onboardingText,
-        sumAssured: onboardingText,
+        sumAssured: amountText,
         renewalDate: onboardingDate,
       }),
     )
@@ -166,9 +166,9 @@ export const onboardingProfileSchema = z.object({
       z.object({
         type: onboardingText,
         bank: onboardingText,
-        amount: onboardingText,
-        outstanding: onboardingText,
-        emi: onboardingText,
+        amount: amountText,
+        outstanding: amountText,
+        emi: amountText,
         closureDate: onboardingDate,
       }),
     )
@@ -179,7 +179,7 @@ export const onboardingProfileSchema = z.object({
       z.object({
         type: onboardingText,
         provider: onboardingText,
-        amount: onboardingText,
+        amount: amountText,
         maturityDate: onboardingDate,
         expectedReturn: onboardingText,
       }),
@@ -197,6 +197,7 @@ export const onboardingProfileSchema = z.object({
         type: onboardingText,
         date: onboardingDate,
         description: onboardingText,
+        repeatAnnually: z.boolean().optional(),
       }),
     )
     .max(30)

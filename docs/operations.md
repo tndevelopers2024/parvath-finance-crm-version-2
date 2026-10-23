@@ -1,6 +1,14 @@
 # Operations and release procedure
 
-## Configuration
+## Contact preferences and important dates
+
+The server enforces WhatsApp-only contact, preferred contact days/windows, and no calls during working hours when opening a conversation or scheduling/rescheduling a follow-up, including initial follow-ups and lead-generated follow-ups. Working hours mean Monday–Friday, 09:00–18:00 in the workspace timezone. Time-window ends are exclusive. Draft messages and historical manual outcomes remain recordable. A blocked action returns a field/action error; staff can edit an incorrect preference through the client profile. Broadcasts skip recipients outside their allowed contact window and report why.
+
+Wedding anniversaries recur annually; custom important dates recur only when **Repeat yearly** is checked. The calendar shows these dates and links to the client. A February 29 yearly date falls on February 28 in non-leap years. Reminders are internal notifications for the client owner at 09:00 in the workspace timezone, independent of messaging services. Removing/changing dates cancels pending jobs; the worker rechecks the current profile before notifying. Deterministic per-occurrence keys prevent duplicates and successful jobs extend the yearly schedule.
+
+Run `npm run worker` alongside `npm run dev`, or set `INLINE_WORKER=1` on the API process. The worker backfills existing profiles at startup and refreshes schedules daily. No database schema change is required: schedules use the existing durable Job/Notification collections. External WhatsApp/email delivery is not implied by an in-app reminder.
+
+## Server configuration
 
 Copy `.env.example` and set required values. SESSION_SECRET must contain at least 32 random characters. MONGODB_URI and MONGODB_DB belong only on the server. Use an Atlas runtime identity restricted to the CRM database and a separate migration identity authorized for validators/indexes. Set TEST_MONGODB_URI/TEST_MONGODB_DB only for isolated tests; never point them at production. See [Atlas setup](mongodb-atlas.md).
 

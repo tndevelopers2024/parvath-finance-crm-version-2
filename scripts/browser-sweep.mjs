@@ -418,7 +418,10 @@ section("leads", async () => {
     "card in Contacted",
     async () => (await count("Contacted")) === before.contacted + 1,
   );
-  assert.equal(await count("New Enquiries"), before.new - 1);
+  await until(
+    "source column count settles",
+    async () => (await count("New Enquiries")) === before.new - 1,
+  );
   assert.ok(
     await page
       .locator('section[aria-label="Contacted"]')
@@ -487,6 +490,11 @@ section("renewals", async () => {
   await pick("All", { exact: true }).click();
   await settle();
   // Search, type and provider filters narrow the list; Reset restores it.
+  const apiAll = (await api("/renewals?limit=1")).meta.total;
+  await until(
+    "All tab rows settle",
+    async () => (await rows()) === Math.min(apiAll, 50),
+  );
   const all = await rows();
   await page.getByPlaceholder(/Search by client name/).fill("Sweep Client 06");
   await until("search narrows", async () => (await rows()) < all);
@@ -528,6 +536,11 @@ section("followups", async () => {
   }
   await pick("All", { exact: true }).click();
   await settle();
+  const followupTotal = (await api("/followups?limit=1")).meta.total;
+  await until(
+    "All follow-up rows settle",
+    async () => (await rows()) === Math.min(followupTotal, 50),
+  );
   const all = await rows();
   assert.ok(all >= 5, "Seeded follow-ups listed: " + all);
   await page.getByLabel("Channel").selectOption("WhatsApp");
