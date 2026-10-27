@@ -86,6 +86,87 @@ try {
       await page
         .getByText("Photo storage is unavailable.", { exact: true })
         .waitFor();
+      await page.getByRole("button", { name: /Additional Details/ }).click();
+      const family = page.locator(".onboard-section").filter({
+        has: page.getByRole("heading", {
+          name: "Family Information",
+          exact: true,
+        }),
+      });
+      const count = family.locator(".readonly-field output");
+      assert.equal(await count.innerText(), "0");
+      assert.equal(await family.locator(".readonly-field input").count(), 0);
+      await family.getByText("Calculated", { exact: true }).waitFor();
+      await family
+        .getByText(/Counted automatically from Children Details/)
+        .waitFor();
+      await family.getByText(/No entries added/).waitFor();
+      assert.equal(await family.locator(".onboard-rows-head").count(), 0);
+      await family
+        .getByRole("button", { name: "Add Child", exact: true })
+        .click();
+      assert.equal(await count.innerText(), "1");
+      await family.getByLabel("Name 1", { exact: true }).fill("Child One");
+      await family
+        .getByLabel("Date of Birth 1", { exact: true })
+        .pressSequentially("01012020");
+      await family.getByLabel("Relationship 1", { exact: true }).fill("Child");
+      await family
+        .getByRole("button", { name: "Add Another Child", exact: true })
+        .click();
+      assert.equal(await count.innerText(), "2");
+      await family
+        .getByRole("button", {
+          name: "Remove Add Another Child 2",
+          exact: true,
+        })
+        .click();
+      assert.equal(await count.innerText(), "1");
+      await family.getByLabel("No. of Dependents", { exact: true }).fill("2");
+      assert.equal(
+        await family
+          .getByLabel("No. of Dependents", { exact: true })
+          .inputValue(),
+        "2",
+      );
+      await page.screenshot({
+        path: "/private/tmp/parvath-family-fields-desktop.png",
+        fullPage: true,
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForFunction(
+        () =>
+          Math.abs(
+            document.querySelector(".workspace").getBoundingClientRect().left,
+          ) < 1,
+      );
+      await page.mouse.move(20, 20);
+      await page.screenshot({
+        path: "/private/tmp/parvath-family-fields-mobile.png",
+        fullPage: true,
+      });
+      const overflow = await page.evaluate(() =>
+        [...document.querySelectorAll("body *")]
+          .map((el) => ({
+            tag: el.tagName,
+            cls: el.className,
+            left: el.getBoundingClientRect().left,
+            right: el.getBoundingClientRect().right,
+          }))
+          .filter((el) => el.right > innerWidth + 1 && el.left >= 0)
+          .slice(0, 15),
+      );
+      if (overflow.length) console.log("Mobile overflow:", overflow);
+      assert.equal(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+      );
+      await page.setViewportSize({ width: 1280, height: 720 });
+      console.log(
+        "PASS child count is explained, follows row add/remove, and dependents remains editable",
+      );
       await page.getByRole("button", { name: "Financial Profile" }).click();
       await page.getByLabel("Loan Amount 1", { exact: true }).fill("-100");
       await page
@@ -106,6 +187,9 @@ try {
       await page.waitForURL("**/clients/client-0");
       assert.equal(writes, 1);
       assert.equal(client.onboardingProfile.loans[0].amount, "₹ 25,000.50");
+      assert.equal(client.onboardingProfile.children.length, 1);
+      assert.equal(client.onboardingProfile.children[0].name, "Child One");
+      assert.equal(client.onboardingProfile.dependents, "2");
       assert.equal(uploads, 0);
       console.log(
         "PASS invalid financial rows blocked, corrected amounts saved, unavailable photo upload disabled",
@@ -207,6 +291,98 @@ try {
     assert.deepEqual(faults, []);
     await page.close();
   }
+  for (const width of [1440, 390]) {
+    for (const theme of ["light", "dark"]) {
+      const modalPage = await browser.newPage({
+        viewport: { width, height: 900 },
+        colorScheme: theme,
+      });
+      await modalPage.addInitScript(
+        (theme) => localStorage.setItem("theme", theme),
+        theme,
+      );
+      await modalPage.route("**/api/**", (route) => {
+        const url = new URL(route.request().url());
+        if (route.request().method() !== "GET")
+          throw Error("Modal field check must not write data");
+        return route.fulfill({
+          json: response(url.pathname.replace("/api", ""), url.searchParams),
+        });
+      });
+      await modalPage.goto(target + "/clients/new");
+      const modal = modalPage.getByRole("dialog", { name: "Add New Client" });
+      await modal.getByLabel(/Full Name/).fill("Family UI Check");
+      await modal.getByLabel(/Phone Number/).fill("9000077776");
+      for (
+        let step = 0;
+        step < 10 && !(await modal.getByLabel(/Marital Status/).isVisible());
+        step++
+      ) {
+        await modal.getByRole("button", { name: /^Next/ }).click();
+      }
+      await modal.getByLabel(/Marital Status/).selectOption("Married");
+      const family = modal.locator(".onboard-section").filter({
+        has: modalPage.getByRole("heading", {
+          name: "Family Information",
+          exact: true,
+        }),
+      });
+      const count = family.locator(".readonly-field output");
+      assert.equal(await count.innerText(), "0");
+      assert.equal(await family.locator(".readonly-field input").count(), 0);
+      await family.getByText(/No entries added/).waitFor();
+      await family
+        .getByRole("button", { name: "Add Child", exact: true })
+        .click();
+      assert.equal(await count.innerText(), "1");
+      await family
+        .getByRole("button", {
+          name: "Remove Add Another Child 1",
+          exact: true,
+        })
+        .click();
+      assert.equal(await count.innerText(), "0");
+      await family.getByLabel("No. of Dependents", { exact: true }).fill("3");
+      assert.equal(
+        await family
+          .getByLabel("No. of Dependents", { exact: true })
+          .inputValue(),
+        "3",
+      );
+      await modalPage.screenshot({
+        path: `/private/tmp/parvath-family-modal-${width}-${theme}.png`,
+        fullPage: true,
+      });
+      assert.equal(
+        await modalPage.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth,
+        ),
+        false,
+      );
+      await modalPage.close();
+      console.log(`PASS new-client family fields at ${width}px ${theme}`);
+    }
+  }
+  const settings = await browser.newPage();
+  await settings.route("**/api/**", (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== "GET")
+      throw Error("Settings review must not write data");
+    return route.fulfill({
+      json: response(url.pathname.replace("/api", ""), url.searchParams),
+    });
+  });
+  await settings.goto(target + "/settings");
+  const email = settings
+    .locator(".readonly-field")
+    .filter({ hasText: "Email address" });
+  await email.locator("output").waitFor();
+  assert.equal(await email.locator("input").count(), 0);
+  await email.getByText(/Contact your administrator/).waitFor();
+  await settings.close();
+  console.log(
+    "PASS account-managed email is a display value with an explanation",
+  );
 } finally {
   await browser.close();
 }

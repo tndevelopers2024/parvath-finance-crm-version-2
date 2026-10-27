@@ -1,4 +1,5 @@
 import CatalogueActions from "./CatalogueActions";
+import ReadOnlyField from "./ReadOnlyField";
 import { useEffect, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
@@ -1238,13 +1239,11 @@ export function Settings() {
                     autoComplete="name"
                   />
                 </label>
-                <label>
-                  Email address
-                  <input value={user.email} disabled />
-                  <small>
-                    Contact your administrator to change your account email.
-                  </small>
-                </label>
+                <ReadOnlyField
+                  label="Email address"
+                  value={user.email}
+                  reason="Contact your administrator to change your account email."
+                />
                 <label>
                   Current password
                   <input

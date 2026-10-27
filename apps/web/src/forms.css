@@ -388,3 +388,13 @@ html.dark .form-error {
 .product-select-option[aria-selected="true"] { background: var(--color-brand-soft); }
 /* A selector is a form field; the app-wide pill-button rule must not change its shape. */
 .product-select .product-select-trigger { border-radius: 10px !important; }
+
+
+/* Calculated and account-managed values are summaries, never fake editable inputs. */
+.readonly-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.readonly-field-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--color-subtle); font-size: 12px; font-weight: 600; }
+.readonly-field-badge { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 5px; background: var(--color-brand-soft); color: var(--color-ink); }
+.readonly-field output { display: block; padding: 4px 0; color: var(--color-ink); font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.readonly-field > small,
+.onboard-empty-rows { color: var(--color-subtle); font-size: 12px; line-height: 1.5; font-weight: 400; }
+.onboard-empty-rows { margin: 0 0 8px; }

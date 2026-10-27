@@ -6,6 +6,7 @@ import { onboardingProfileSchema } from "../../../packages/contracts/src/index";
 import type { z } from "zod";
 import { Avatar } from "./components";
 import DateField from "./DateField";
+import ReadOnlyField from "./ReadOnlyField";
 import { date as showDate, todayIST } from "./api";
 
 export type OnboardingProfile = z.input<typeof onboardingProfileSchema>;
@@ -82,6 +83,8 @@ function Text({
         <>
           <input
             type={type}
+            min={min}
+            max={max}
             value={value || ""}
             placeholder={placeholder}
             aria-invalid={!!error}
@@ -171,12 +174,19 @@ function Rows({
       className="onboard-rows"
       style={{ "--row-columns": columns.length } as CSSProperties}
     >
-      <div className="onboard-rows-head">
-        {columns.map((c) => (
-          <span key={c.key}>{c.label}</span>
-        ))}
-        <span>Actions</span>
-      </div>
+      {rows.length > 0 ? (
+        <div className="onboard-rows-head">
+          {columns.map((c) => (
+            <span key={c.key}>{c.label}</span>
+          ))}
+          <span>Actions</span>
+        </div>
+      ) : (
+        <p className="onboard-empty-rows">
+          No entries added. Use “{addLabel.replace(/^Add Another /, "Add ")}”
+          below to enter details.
+        </p>
+      )}
       {rows.map((row, index) => (
         <div className="onboard-row" key={index}>
           {columns.map((c) => {
@@ -239,7 +249,8 @@ function Rows({
         className="onboard-add"
         onClick={() => onChange([...rows, {}])}
       >
-        <Plus size={14} /> {addLabel}
+        <Plus size={14} />{" "}
+        {rows.length ? addLabel : addLabel.replace(/^Add Another /, "Add ")}
       </button>
     </div>
   );
@@ -287,15 +298,21 @@ export function AdditionalDetails({
                   value={profile.weddingDate}
                   onChange={(v) => put("weddingDate", v)}
                 />
-                <label className="onboard-field">
-                  No. of Children
-                  <input value={profile.children?.length || 0} readOnly />
-                </label>
+                <ReadOnlyField
+                  label="No. of Children"
+                  value={profile.children?.length || 0}
+                  badge="Calculated"
+                  reason="Counted automatically from Children Details below. Add or remove a child there to update this number."
+                  live
+                />
               </>
             )}
             <Text
               label="No. of Dependents"
               type="number"
+              min="0"
+              max="99"
+              placeholder="Enter a number from 0 to 99"
               value={profile.dependents}
               error={errors.dependents}
               onChange={(v) => put("dependents", v)}

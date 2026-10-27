@@ -1,4 +1,9 @@
 .custom-cursor {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  contain: paint;
+  z-index: 9999;
   --cursor-dot: #173f35;
   pointer-events: none;
   opacity: 0;
