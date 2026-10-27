@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { z } from "zod";
 import {
@@ -654,10 +655,11 @@ workflows.post("/leads/:id/convert", permit("edit"), async (req, res) => {
       version: z.number().int(),
       accepted: z.literal(true),
       definitionId: z.uuid(),
-      identifier: z.string().min(3).max(100),
+      identifier: z.string().trim().min(3).max(100).optional(),
     })
     .parse(req.body);
   await owned("productDefinition", v.definitionId, req);
+  const identifier = v.identifier ?? `APP-${randomUUID()}`;
   const product = await db.transaction(async (tx) => {
     const existing = await tx.clientProduct.findUnique({
       where: { opportunityId: old.id },
@@ -684,7 +686,7 @@ workflows.post("/leads/:id/convert", permit("edit"), async (req, res) => {
         clientId: old.clientId,
         opportunityId: old.id,
         definitionId: v.definitionId,
-        identifier: v.identifier,
+        identifier,
         status: "Application",
         startDate: dateOnly(day()),
       },

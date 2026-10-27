@@ -330,7 +330,6 @@ try {
   await accept.getByRole("combobox", { name: "Product option", exact: true }).click();
   await page.getByRole("combobox", { name: "Search products", exact: true }).fill(planName);
   await page.getByRole("option").filter({ hasText: planName }).click();
-  await accept.locator('input[name="identifier"]').fill("JOURNEY-" + suffix);
   await accept.getByRole("button", { name: "Confirm acceptance" }).click();
   assert.equal(
     (await api("/leads/" + saleLeadId)).data.stage,

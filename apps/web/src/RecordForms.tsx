@@ -416,6 +416,8 @@ export function LeadDetail() {
   if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const l = q.data.data;
+  const canAccept =
+    user.role !== "Operations" && !["Won", "Lost"].includes(l.stage);
   return (
     <>
       <Back to="/leads">Back to Leads</Back>
@@ -426,6 +428,23 @@ export function LeadDetail() {
           <>
             <Badge>{leadStageLabel(l.stage)}</Badge>
             <button onClick={() => setEdit(true)}>Edit Lead</button>
+            {canAccept && (
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  write.reset();
+                  setAccept(true);
+                }}
+              >
+                Accept sale
+              </button>
+            )}
+            {l.stage === "Won" && l.product && (
+              <Link className="button primary" to={`/products/${l.product.id}`}>
+                View application
+              </Link>
+            )}
           </>
         }
       />
@@ -524,7 +543,9 @@ export function LeadDetail() {
               className="primary"
               disabled={write.isPending || l.stage === "Won"}
               onClick={async () => {
-                if (stage === "Won") {
+                const nextStage = stage || leadStageLabel(l.stage);
+                if (nextStage === "Won") {
+                  write.reset();
                   setAccept(true);
                   return;
                 }
@@ -532,7 +553,7 @@ export function LeadDetail() {
                   await write.mutateAsync({
                     path: `/leads/${id}/stage`,
                     body: {
-                      stage: stage || leadStageLabel(l.stage),
+                      stage: nextStage,
                       reason,
                       version: l.version,
                     },
@@ -545,6 +566,12 @@ export function LeadDetail() {
             >
               Update Stage
             </button>
+            {canAccept && (
+              <p className="muted">
+                To record the client’s acceptance and create an application, use
+                Accept sale above, or select Won and click Update Stage.
+              </p>
+            )}
             {l.stage === "Won" && (
               <p className="muted">
                 Accepted sales retain their history. Create a new opportunity
@@ -603,10 +630,6 @@ export function LeadDetail() {
                 error={catalogue.error}
                 onRetry={() => void catalogue.refetch()}
               />
-            </label>
-            <label>
-              Application Identifier
-              <input required name="identifier" minLength={3} />
             </label>
             <label className="choice-row">
               <input required type="checkbox" />

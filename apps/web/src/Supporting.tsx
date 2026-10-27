@@ -108,11 +108,18 @@ export function ProductClients({
         ← Back to products
       </Link>
       <PageHeading
-        title={category || "Client policies & accounts"}
+        title={
+          category ||
+          (status === "Application"
+            ? "Applications awaiting activation"
+            : "Client policies & accounts")
+        }
         subtitle={
           category
             ? `Clients and their ${category.toLowerCase()} policies or accounts.`
-            : "View all client policies and accounts across your products."
+            : status === "Application"
+              ? "Clients with policy or account applications awaiting activation."
+              : "View all client policies and accounts across your products."
         }
         actions={
           <>

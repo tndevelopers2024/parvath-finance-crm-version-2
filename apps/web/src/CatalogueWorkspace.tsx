@@ -157,13 +157,29 @@ export default function CatalogueWorkspace({
             "Current client records",
           ],
           ["Applications", count("applications"), "Awaiting activation"],
-        ].map(([label, value, note]) => (
-          <div className="catalogue-metric" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{note}</small>
-          </div>
-        ))}
+        ].map(([label, value, note]) => {
+          const content = (
+            <>
+              <span>{label}</span>
+              <strong>{value}</strong>
+              <small>{note}</small>
+            </>
+          );
+          return label === "Applications" ? (
+            <Link
+              className="catalogue-metric catalogue-metric-link"
+              to="/products/records?status=Application"
+              key={label}
+              aria-label="View applications awaiting activation"
+            >
+              {content}
+            </Link>
+          ) : (
+            <div className="catalogue-metric" key={label}>
+              {content}
+            </div>
+          );
+        })}
       </div>
       <section className="catalogue-register">
         <div className="catalogue-register-title">

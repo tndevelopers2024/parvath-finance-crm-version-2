@@ -268,7 +268,7 @@ const actionSchemas: Record<string, any> = {
     version: z.number().int(),
     accepted: z.literal(true),
     definitionId: z.uuid(),
-    identifier: z.string().min(3),
+    identifier: z.string().trim().min(3).max(100).optional(),
   }),
   "/renewals/{id}/payment": z.object({
     reference: z.string().min(3),

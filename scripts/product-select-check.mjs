@@ -32,24 +32,39 @@ try {
         (theme) => localStorage.setItem("theme", theme),
         theme,
       );
-      for (const mode of ["new", "conversion"]) {
+      for (const mode of ["new", "conversion", "direct-conversion"]) {
         await page.goto(
           "http://localhost:5177" +
             (mode === "new"
               ? "/products/new?category=Business%20Loan&definitionId=plan-0"
               : "/leads/lead-0"),
         );
-        if (mode === "conversion") {
-          await page
-            .locator("label", { hasText: /^Stage/ })
-            .locator("select")
-            .selectOption("Won");
-          await page
-            .getByRole("button", { name: "Update Stage", exact: true })
-            .click();
+        if (mode !== "new") {
+          if (mode === "conversion") {
+            await page
+              .locator("label", { hasText: /^Stage/ })
+              .locator("select")
+              .selectOption("Won");
+            await page
+              .getByRole("button", { name: "Update Stage", exact: true })
+              .click();
+          } else {
+            await page
+              .getByRole("button", { name: "Accept sale", exact: true })
+              .click();
+          }
           await page
             .getByRole("dialog", { name: "Accept sale & create application" })
             .waitFor();
+          if (
+            await page
+              .getByRole("dialog", { name: "Accept sale & create application" })
+              .locator('input[name="identifier"]')
+              .count()
+          )
+            throw Error(
+              "Acceptance must not ask for an application identifier",
+            );
           if (
             await page
               .locator('select[name="definitionId"]')

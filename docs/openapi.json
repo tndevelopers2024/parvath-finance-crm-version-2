@@ -4356,14 +4356,14 @@
                   },
                   "identifier": {
                     "type": "string",
-                    "minLength": 3
+                    "minLength": 3,
+                    "maxLength": 100
                   }
                 },
                 "required": [
                   "version",
                   "accepted",
-                  "definitionId",
-                  "identifier"
+                  "definitionId"
                 ],
                 "additionalProperties": false
               }

@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
-import { response, leads, clients } from "../tests/fixtures/workspace-ui.mjs";
+import {
+  response,
+  leads,
+  clients,
+  products,
+} from "../tests/fixtures/workspace-ui.mjs";
 const target = process.env.TARGET_URL || "http://localhost:5177";
 const browser = await chromium.launch({ headless: true });
 let role = "Administrator",
   calendarFailure = false,
   productPatch,
-  createdClient;
+  createdClient,
+  acceptanceBody;
 const seed = [
   {
     ...leads[0],
@@ -38,6 +44,18 @@ try {
       url = new URL(req.url()),
       p = url.pathname.replace("/api", "");
     if (req.method() !== "GET") {
+      if (p === "/leads/qualified-test/convert") {
+        acceptanceBody = req.postDataJSON();
+        return route.fulfill({
+          json: {
+            data: {
+              id: "accepted-product",
+              status: "Application",
+              identifier: "APP-fixture-auto-reference",
+            },
+          },
+        });
+      }
       if (p === "/clients" && req.method() === "POST") {
         createdClient = {
           ...structuredClone(clients[0]),
@@ -66,10 +84,54 @@ try {
         json: { error: { message: "Fixture calendar request failed" } },
       });
     const data = structuredClone(response(p, url.searchParams));
-    if (p === "/leads/qualified-test") data.data = seed[0];
+    if (p === "/leads/qualified-test")
+      data.data = acceptanceBody
+        ? {
+            ...seed[0],
+            stage: "Won",
+            product: {
+              id: "accepted-product",
+              status: "Application",
+              identifier: "APP-fixture-auto-reference",
+            },
+          }
+        : seed[0];
+    if (p === "/leads/accepted-fixture")
+      data.data = {
+        ...structuredClone(leads[0]),
+        stage: "Won",
+        product: {
+          id: "product-0",
+          status: "Application",
+          identifier: "APP-FIXTURE",
+        },
+      };
     if (createdClient && p === "/clients/" + createdClient.id)
       data.data = createdClient;
     if (p === "/auth/me") data.data.role = role;
+    if (p === "/products") {
+      const rows = [
+        {
+          ...structuredClone(products[0]),
+          status: "Application",
+          client: { ...products[0].client, name: "Pending Activation Client" },
+        },
+        {
+          ...structuredClone(products[1]),
+          status: "Active",
+          client: { ...products[1].client, name: "Already Active Client" },
+        },
+      ].filter(
+        (product) =>
+          !url.searchParams.get("status") ||
+          product.status === url.searchParams.get("status"),
+      );
+      data.data = rows;
+      data.meta = { total: rows.length };
+    }
+    if (p === "/products/summary") {
+      data.products[0].applications = 1;
+    }
     if (p === "/dashboard") {
       Object.assign(data.data, {
         hotLeads: 2,
@@ -136,6 +198,34 @@ try {
     await stageSelect.getByText("Qualified", { exact: true }).count(),
     0,
   );
+  await page.getByRole("button", { name: "Accept sale", exact: true }).click();
+  const acceptance = page.getByRole("dialog", {
+    name: "Accept sale & create application",
+    exact: true,
+  });
+  await acceptance.waitFor();
+  assert.equal(await acceptance.locator('input[name="identifier"]').count(), 0);
+  await acceptance
+    .getByRole("combobox", { name: "Product option", exact: true })
+    .click();
+  await page
+    .getByRole("listbox", { name: "Product plans", exact: true })
+    .getByRole("option")
+    .first()
+    .click();
+  await acceptance.getByRole("checkbox").check();
+  await acceptance
+    .getByRole("button", { name: "Confirm acceptance", exact: true })
+    .click();
+  await page
+    .getByRole("link", { name: "View application", exact: true })
+    .waitFor();
+  assert.equal(acceptanceBody.identifier, undefined);
+  assert.equal(acceptanceBody.accepted, true);
+  assert.equal(acceptanceBody.definitionId, "definition-ui");
+  console.log(
+    "PASS sale acceptance submits successfully without an identifier field",
+  );
   await page.goto(target + "/leads");
   await page.locator(".metric").filter({ hasText: "Hot Leads" }).click();
   await page.getByText("High Regression Client", { exact: true }).waitFor();
@@ -145,8 +235,59 @@ try {
     await page.getByRole("region", { name: "Qualified", exact: true }).count(),
     0,
   );
+  await page.goto(target + "/leads/accepted-fixture");
+  const application = page.getByRole("link", {
+    name: "View application",
+    exact: true,
+  });
+  await application.waitFor();
+  assert.equal(await application.getAttribute("href"), "/products/product-0");
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Accept sale", exact: true })
+      .count(),
+    0,
+  );
   console.log(
     "PASS legacy Qualified leads are grouped under Contacted and Hot includes Urgent",
+  );
+
+  for (const route of ["/products", "/providers"]) {
+    await page.goto(target + route);
+    await page
+      .getByRole("link", {
+        name: "View applications awaiting activation",
+        exact: true,
+      })
+      .click();
+    assert.equal(new URL(page.url()).searchParams.get("status"), "Application");
+    await page
+      .getByRole("heading", {
+        name: "Applications awaiting activation",
+        exact: true,
+      })
+      .waitFor();
+    await page.getByRole("tab", { name: "Application", exact: true }).waitFor();
+    assert.equal(
+      await page
+        .getByRole("tab", { name: "Application", exact: true })
+        .getAttribute("aria-selected"),
+      "true",
+    );
+    await page
+      .locator(".products-table")
+      .getByText("Pending Activation Client", { exact: true })
+      .waitFor();
+    assert.equal(
+      await page
+        .locator(".products-table")
+        .getByText("Already Active Client", { exact: true })
+        .count(),
+      0,
+    );
+  }
+  console.log(
+    "PASS Applications cards open the activation waiting list with only Application records",
   );
 
   await page.goto(target + "/products/records?category=Life%20Insurance");
@@ -269,6 +410,16 @@ try {
   );
 
   role = "Operations";
+  await page.goto(target + "/leads/lead-0");
+  await page
+    .getByRole("button", { name: "Update Stage", exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Accept sale", exact: true })
+      .count(),
+    0,
+  );
   await page.goto(target + "/clients");
   await page.getByRole("heading", { name: "Clients", exact: true }).waitFor();
   assert.equal(

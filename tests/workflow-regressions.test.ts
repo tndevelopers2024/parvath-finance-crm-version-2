@@ -290,3 +290,47 @@ it("returns exact today, seven-day and thirty-day event totals with net premium 
     premiumOverdueMinor: "20000",
   });
 });
+
+it("accepts sales without a manual identifier and preserves the generated reference across retries", async () => {
+  const references = new Set<string>();
+  for (let i = 0; i < 2; i++) {
+    const lead = await write("/leads", {
+      clientId,
+      ownerId: userId,
+      requirement: "Automatic application reference",
+      nextAction: "Confirm proposal",
+    });
+    expect(lead.status).toBe(201);
+    const path = `/leads/${lead.body.data.id}/convert`;
+    const body = {
+      version: lead.body.data.version,
+      accepted: true,
+      definitionId,
+    };
+    const replies = await Promise.all(
+      Array.from({ length: 3 }, () => write(path, body)),
+    );
+    for (const result of replies) expect(result.status, result.text).toBe(200);
+    expect(new Set(replies.map((result) => result.body.data.id)).size).toBe(1);
+    expect(
+      new Set(replies.map((result) => result.body.data.identifier)).size,
+    ).toBe(1);
+    const product = replies[0].body.data;
+    expect(product.status).toBe("Application");
+    expect(product.identifier).toMatch(/^APP-[0-9a-f-]{36}$/);
+    references.add(product.identifier);
+    const retry = await write(path, body);
+    expect(retry.status).toBe(200);
+    expect(retry.body.data.identifier).toBe(product.identifier);
+    expect(
+      await db.clientProduct.count({
+        where: { opportunityId: lead.body.data.id },
+      }),
+    ).toBe(1);
+    const saved = (await admin.get(`/api/leads/${lead.body.data.id}`)).body
+      .data;
+    expect(saved.stage).toBe("Won");
+    expect(saved.clientId).toBe(clientId);
+  }
+  expect(references.size).toBe(2);
+});

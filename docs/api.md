@@ -29,7 +29,7 @@ The lead list accepts `priority=Hot` to include both High and Urgent opportuniti
 
 Create: `{clientId,requirement,ownerId,priority,source,notes?,nextAction,nextFollowUp?,stage?}`. Closed initial stages are rejected. Stage action: `{stage,version,reason?}`. Lost and reopening require a reason. Won must use conversion rather than direct stage movement.
 
-`POST /leads/{id}/convert`: `{version,accepted:true,definitionId,identifier}`. Client acceptance is recorded, the existing identity is reused, and one product Application is linked through a unique opportunityId. Retried conversion returns that same product.
+`POST /leads/{id}/convert`: `{version,accepted:true,definitionId,identifier?}`. The acceptance UI does not ask for an identifier; the server generates a unique `APP-…` reference when omitted. Existing API callers may still supply an identifier. Client acceptance is recorded, the existing identity is reused, and one product Application is linked through a unique opportunityId. Retried conversion returns that same product.
 
 Editing a lead synchronizes its next action, owner, priority and optional next-follow-up date with the earliest pending linked task. An omitted date keeps that task's date; `nextFollowUp:null` cancels pending linked tasks. Creating, rescheduling, completing or cancelling a linked task updates the lead's summary date to its earliest pending task (or null). These changes are transactional and increment the lead version.
 

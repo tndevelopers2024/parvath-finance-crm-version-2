@@ -403,3 +403,7 @@ html.dark .form-error {
 .app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
   padding-bottom: 28px;
 }
+
+.catalogue-metric-link { text-decoration: none; color: inherit; cursor: pointer; }
+.catalogue-metric-link:hover { background: var(--ws-soft); border-color: var(--ws-green); }
+.catalogue-metric-link:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 3px; }
