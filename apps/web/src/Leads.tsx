@@ -11,7 +11,10 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
-import { stages } from "../../../packages/contracts/src/index";
+import {
+  stages,
+  visibleLeadStages,
+} from "../../../packages/contracts/src/index";
 import { date, query, useData, useInfiniteData, useWrite } from "./api";
 import {
   Avatar,
@@ -161,8 +164,13 @@ export default function Leads() {
             </div>
           </div>
           <div className="lead-board" ref={boardRef}>
-            {stages.map((s, i) => (
-              <LeadColumn key={s} stage={s} index={i} filters={filters} />
+            {visibleLeadStages.map((s) => (
+              <LeadColumn
+                key={s}
+                stage={s}
+                index={stages.indexOf(s)}
+                filters={filters}
+              />
             ))}
           </div>
         </DndContext>

@@ -66,6 +66,7 @@ try {
         json: { error: { message: "Fixture calendar request failed" } },
       });
     const data = structuredClone(response(p, url.searchParams));
+    if (p === "/leads/qualified-test") data.data = seed[0];
     if (createdClient && p === "/clients/" + createdClient.id)
       data.data = createdClient;
     if (p === "/auth/me") data.data.role = role;
@@ -86,7 +87,9 @@ try {
       data.data = seed.filter(
         (l) =>
           (!url.searchParams.get("stage") ||
-            l.stage === url.searchParams.get("stage")) &&
+            (url.searchParams.get("stage") === "Contacted"
+              ? ["Contacted", "Qualified"].includes(l.stage)
+              : l.stage === url.searchParams.get("stage"))) &&
           (!url.searchParams.get("priority") ||
             (url.searchParams.get("priority") === "Hot"
               ? ["High", "Urgent"].includes(l.priority)
@@ -115,11 +118,36 @@ try {
   await page
     .getByText("Qualified Regression Client", { exact: true })
     .waitFor();
+  assert.equal(
+    await page.getByRole("region", { name: "Qualified", exact: true }).count(),
+    0,
+  );
+  await page.goto(target + "/leads/qualified-test");
+  const stageSelect = page
+    .locator("label", { hasText: /^Stage/ })
+    .locator("select");
+  await stageSelect.waitFor();
+  assert.equal(await stageSelect.inputValue(), "Contacted");
+  assert.equal(
+    await stageSelect.locator('option[value="Qualified"]').count(),
+    0,
+  );
+  assert.equal(
+    await stageSelect.getByText("Qualified", { exact: true }).count(),
+    0,
+  );
+  await page.goto(target + "/leads");
   await page.locator(".metric").filter({ hasText: "Hot Leads" }).click();
   await page.getByText("High Regression Client", { exact: true }).waitFor();
   await page.getByText("Urgent Regression Client", { exact: true }).waitFor();
   assert.equal(new URL(page.url()).searchParams.get("priority"), "Hot");
-  console.log("PASS Qualified leads remain visible and Hot includes Urgent");
+  assert.equal(
+    await page.getByRole("region", { name: "Qualified", exact: true }).count(),
+    0,
+  );
+  console.log(
+    "PASS legacy Qualified leads are grouped under Contacted and Hot includes Urgent",
+  );
 
   await page.goto(target + "/products/records?category=Life%20Insurance");
   await page

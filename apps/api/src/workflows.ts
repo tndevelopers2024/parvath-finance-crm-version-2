@@ -369,7 +369,7 @@ workflows.get("/leads", async (req, res) => {
     : undefined;
   const where = {
     organizationId: req.auth.organizationId,
-    stage,
+    stage: stage === "Contacted" ? { in: ["Contacted", "Qualified"] } : stage,
     priority: priority === "Hot" ? { in: ["High", "Urgent"] } : priority,
     ...(req.query.clientId
       ? { clientId: z.uuid().parse(req.query.clientId) }

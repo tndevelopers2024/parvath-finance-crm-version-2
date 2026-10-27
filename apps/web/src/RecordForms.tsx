@@ -6,7 +6,10 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, Plus } from "lucide-react";
-import { stages } from "../../../packages/contracts/src/index";
+import {
+  visibleLeadStages,
+  leadStageLabel,
+} from "../../../packages/contracts/src/index";
 import DateField from "./DateField";
 import ProductSelect from "./ProductSelect";
 import { date, query, rupees, time, toMinor, useData, useWrite } from "./api";
@@ -246,7 +249,7 @@ export function NewRecord({
                     <option value="">No opportunity</option>
                     {linkedLeads.data?.data.map((l: any) => (
                       <option key={l.id} value={l.id}>
-                        {l.requirement} · {l.stage}
+                        {l.requirement} · {leadStageLabel(l.stage)}
                       </option>
                     ))}
                   </select>
@@ -421,7 +424,7 @@ export function LeadDetail() {
         subtitle={l.requirement}
         actions={
           <>
-            <Badge>{l.stage}</Badge>
+            <Badge>{leadStageLabel(l.stage)}</Badge>
             <button onClick={() => setEdit(true)}>Edit Lead</button>
           </>
         }
@@ -500,10 +503,10 @@ export function LeadDetail() {
             <label>
               Stage
               <select
-                value={stage || l.stage}
+                value={stage || leadStageLabel(l.stage)}
                 onChange={(e) => setStage(e.target.value)}
               >
-                {stages.map((s) => (
+                {visibleLeadStages.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
               </select>
@@ -529,7 +532,7 @@ export function LeadDetail() {
                   await write.mutateAsync({
                     path: `/leads/${id}/stage`,
                     body: {
-                      stage: stage || l.stage,
+                      stage: stage || leadStageLabel(l.stage),
                       reason,
                       version: l.version,
                     },

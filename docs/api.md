@@ -25,7 +25,7 @@ Commit POST `/clients/import/{id}/commit` creates clients in chunks of 20 rows, 
 
 ## Opportunities
 
-The lead list accepts `priority=Hot` to include both High and Urgent opportunities. Every supported stage, including Qualified, is available on the board.
+The lead list accepts `priority=Hot` to include both High and Urgent opportunities. Qualified is no longer offered in the interface. Existing Qualified records are included in Contacted lists so they remain accessible; their stored history is preserved.
 
 Create: `{clientId,requirement,ownerId,priority,source,notes?,nextAction,nextFollowUp?,stage?}`. Closed initial stages are rejected. Stage action: `{stage,version,reason?}`. Lost and reopening require a reason. Won must use conversion rather than direct stage movement.
 

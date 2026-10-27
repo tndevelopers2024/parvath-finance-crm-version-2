@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { leadStageLabel } from "../../../packages/contracts/src/index";
 import { Link } from "react-router-dom";
 import {
   Cake,
@@ -105,7 +106,7 @@ export default function Dashboard() {
       .slice(0, 2)
       .map((l: any) => ({
         type: "Leads",
-        label: "LEAD · " + l.stage.toUpperCase(),
+        label: "LEAD · " + leadStageLabel(l.stage).toUpperCase(),
         title: l.client.name,
         subtitle: l.requirement,
         extra: l.nextAction,

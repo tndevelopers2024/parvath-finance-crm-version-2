@@ -56,6 +56,12 @@ export const stages = [
   "Won",
   "Lost",
 ] as const;
+// Keep legacy values readable while offering only the current sales stages.
+export const visibleLeadStages = stages.filter(
+  (stage) => stage !== "Qualified",
+);
+export const leadStageLabel = (stage: string) =>
+  stage === "Qualified" ? "Contacted" : stage;
 export const businessDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Enter a valid date.", abort: true })

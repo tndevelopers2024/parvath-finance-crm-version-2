@@ -270,7 +270,13 @@ export function response(path, params = new URLSearchParams()) {
   if (path === "/leads") {
     // Same contract as the API: stage and priority filter, then pages of `limit`, newest first.
     const matching = leads
-      .filter((l) => !params.get("stage") || l.stage === params.get("stage"))
+      .filter(
+        (l) =>
+          !params.get("stage") ||
+          (params.get("stage") === "Contacted"
+            ? ["Contacted", "Qualified"].includes(l.stage)
+            : l.stage === params.get("stage")),
+      )
       .filter(
         (l) =>
           !params.get("priority") ||

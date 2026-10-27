@@ -210,7 +210,7 @@ try {
   await page.goto(target + "/leads");
   await page.locator(".lead-board").waitFor();
   // Each stage pages by itself: the count is the stage's full total, cards arrive 25 at a time,
-  // and every card can be reached, including Qualified.
+  // and legacy Qualified leads appear under Contacted.
   const newColumn = page.getByRole("region", { name: "New Enquiries" });
   await newColumn.getByLabel("32 leads in New Enquiries").waitFor();
   // The column starts with one page of 25; scrolling may already have asked for more.
@@ -225,7 +225,14 @@ try {
         'section[aria-label="New Enquiries"] .lead-card',
       ).length === 32,
   );
-  await page.getByRole("region", { name: "Qualified", exact: true }).waitFor();
+  if (
+    await page.getByRole("region", { name: "Qualified", exact: true }).count()
+  )
+    throw Error("Qualified column must not be shown");
+  await page
+    .getByRole("region", { name: "Contacted", exact: true })
+    .getByLabel("2 leads in Contacted")
+    .waitFor();
   await page.getByRole("button", { name: "Collapse Contacted" }).click();
   await page.getByRole("button", { name: "Expand Contacted" }).click();
   await page.goto(target + "/leads?priority=High");
@@ -238,7 +245,7 @@ try {
     .getByLabel("0 leads in New Enquiries")
     .waitFor();
   console.log(
-    "PASS lead board paging, stage totals, filter and visible Qualified",
+    "PASS lead board paging, stage totals, filter and legacy-stage grouping",
   );
   await page.goto(target + "/clients/new");
   await page.getByRole("button", { name: "Next: Additional Details" }).click();

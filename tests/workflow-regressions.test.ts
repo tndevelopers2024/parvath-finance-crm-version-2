@@ -220,7 +220,7 @@ it("keeps lead dates and tasks synchronized through editing, completion and canc
   expect((await readLead()).nextFollowUp).toBeNull();
 });
 
-it("includes both High and Urgent leads in the Hot filter and keeps Qualified queryable", async () => {
+it("groups legacy Qualified leads under Contacted and includes both High and Urgent in Hot", async () => {
   const ids: string[] = [];
   for (const priority of ["Normal", "High", "Urgent"]) {
     const r = await write("/leads", {
@@ -238,7 +238,7 @@ it("includes both High and Urgent leads in the Hot filter and keeps Qualified qu
     clientId,
     q: "Hot filter regression",
     priority: "Hot",
-    stage: "Qualified",
+    stage: "Contacted",
   });
   expect(hot.status, hot.text).toBe(200);
   expect(hot.body.meta.total).toBe(2);
