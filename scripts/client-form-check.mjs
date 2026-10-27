@@ -294,7 +294,7 @@ try {
   for (const width of [1440, 390]) {
     for (const theme of ["light", "dark"]) {
       const modalPage = await browser.newPage({
-        viewport: { width, height: 900 },
+        viewport: { width, height: width < 700 ? 844 : 800 },
         colorScheme: theme,
       });
       await modalPage.addInitScript(
@@ -349,6 +349,57 @@ try {
           .inputValue(),
         "3",
       );
+      for (let child = 1; child <= 3; child++) {
+        await family
+          .getByRole("button", {
+            name: child === 1 ? "Add Child" : "Add Another Child",
+            exact: true,
+          })
+          .click();
+        const name = family.getByLabel(`Name ${child}`, { exact: true });
+        assert.equal(
+          await name.evaluate((el) => document.activeElement === el),
+          true,
+        );
+        await name.fill(`Child ${child}`);
+        const bounds = await name.boundingBox();
+        const footer = await modal.locator(".form-footer").boundingBox();
+        assert.ok(
+          bounds && footer && bounds.y + bounds.height <= footer.y - 4,
+          "New child field is hidden by the footer",
+        );
+      }
+      assert.equal(await count.innerText(), "3");
+      const body = modal.locator(".onboarding-form-body");
+      assert.equal(
+        await body.evaluate((el) => getComputedStyle(el).overflowY),
+        "auto",
+      );
+      await body.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
+      const remove = family.getByRole("button", {
+        name: "Remove Add Another Child 3",
+        exact: true,
+      });
+      const removeBox = await remove.boundingBox();
+      const footerBox = await modal.locator(".form-footer").boundingBox();
+      const bodyBox = await body.boundingBox();
+      assert.ok(
+        removeBox &&
+          footerBox &&
+          bodyBox &&
+          removeBox.y >= bodyBox.y &&
+          removeBox.y + removeBox.height <= footerBox.y - 4,
+        "Last child action must scroll fully above the footer",
+      );
+      const addBox = await family
+        .getByRole("button", { name: "Add Another Child", exact: true })
+        .boundingBox();
+      assert.ok(
+        addBox && footerBox && addBox.y + addBox.height <= footerBox.y - 4,
+        "Add child action must remain reachable",
+      );
       await modalPage.screenshot({
         path: `/private/tmp/parvath-family-modal-${width}-${theme}.png`,
         fullPage: true,
@@ -360,7 +411,9 @@ try {
         false,
       );
       await modalPage.close();
-      console.log(`PASS new-client family fields at ${width}px ${theme}`);
+      console.log(
+        `PASS new-client family fields and scrolling above footer at ${width}px ${theme}`,
+      );
     }
   }
   const settings = await browser.newPage();

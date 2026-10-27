@@ -1,4 +1,9 @@
-import type { CSSProperties, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import type { ClientInput } from "../../../packages/contracts/src/index";
@@ -169,8 +174,23 @@ function Rows({
   name?: string;
   errors?: Record<string, string>;
 }) {
+  const container = useRef<HTMLDivElement>(null);
+  const previousCount = useRef(rows.length);
+  useLayoutEffect(() => {
+    if (rows.length > previousCount.current) {
+      const row =
+        container.current?.querySelectorAll(".onboard-row")[rows.length - 1];
+      const control = row?.querySelector<HTMLInputElement>(
+        "input:not([type=hidden]),select,textarea",
+      );
+      control?.focus({ preventScroll: true });
+      control?.scrollIntoView({ block: "center", inline: "nearest" });
+    }
+    previousCount.current = rows.length;
+  }, [rows.length]);
   return (
     <div
+      ref={container}
       className="onboard-rows"
       style={{ "--row-columns": columns.length } as CSSProperties}
     >

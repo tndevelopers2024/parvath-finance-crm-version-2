@@ -398,3 +398,8 @@ html.dark .form-error {
 .readonly-field > small,
 .onboard-empty-rows { color: var(--color-subtle); font-size: 12px; line-height: 1.5; font-weight: 400; }
 .onboard-empty-rows { margin: 0 0 8px; }
+
+/* The last repeating row must scroll fully above the fixed dialog actions. */
+.app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
+  padding-bottom: 28px;
+}

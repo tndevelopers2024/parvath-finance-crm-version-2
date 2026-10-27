@@ -713,17 +713,25 @@ html.dark .app-shell.workspace-redesign .greeting {
 }
 
 .app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-line) transparent;
+  scrollbar-gutter: stable;
+  scroll-padding-block: 20px;
 }
 .app-shell.workspace-redesign
   .client-onboarding-popup
   .onboarding-form-body::-webkit-scrollbar {
-  display: none;
+  width: 8px;
+}
+.app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body::-webkit-scrollbar-thumb {
+  background: var(--ws-line);
+  border-radius: 8px;
 }
 
-/* Keep the client popup's form and controls together without scrolling. */
+/* Keep growing sections scrollable above the separate action footer. */
 .app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 28px;
 }
 .app-shell.workspace-redesign .client-onboarding-popup .form-grid {

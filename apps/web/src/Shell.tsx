@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import {
   Bell,
+  ChartNoAxesColumnIncreasing,
   CheckSquare,
   ChevronDown,
   House,
@@ -43,6 +44,7 @@ const nav = [
   ["Providers", "/providers", House],
   ["Products", "/products", Package],
   ["WhatsApp", "/engagement", WhatsAppIcon],
+  ["Reports", "/reports", ChartNoAxesColumnIncreasing],
   ["Settings", "/settings", Settings],
 ] as const;
 export default function Shell() {
