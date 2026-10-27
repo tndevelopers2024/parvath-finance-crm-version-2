@@ -98,6 +98,7 @@ export function ProductClients({
     "q",
     "definitionId",
     "status",
+    "clientId",
     ...(!routeCategory && !selectedCategory ? ["category"] : []),
   ].some((key) => params.has(key));
   return (
@@ -326,9 +327,14 @@ export function ProductClients({
                 onClick={() =>
                   setParams((previous) => {
                     const next = new URLSearchParams(previous);
-                    ["q", "definitionId", "status", "page"].forEach((key) =>
-                      next.delete(key),
-                    );
+                    [
+                      "q",
+                      "definitionId",
+                      "status",
+                      "page",
+                      "category",
+                      "clientId",
+                    ].forEach((key) => next.delete(key));
                     return next;
                   })
                 }
@@ -1132,8 +1138,7 @@ export function Settings() {
   const { theme, setTheme } = useTheme();
   const [section, setSection] = useState("Profile");
   const [localError, setLocalError] = useState("");
-  const members = useData("/members", section === "Team");
-  const sections = ["Profile", "Security", "Appearance", "Team"];
+  const sections = ["Profile", "Security", "Appearance"];
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLocalError("");
@@ -1172,7 +1177,7 @@ export function Settings() {
     <div className="settings-page">
       <PageHeading
         title="Settings"
-        subtitle="Manage your account, preferences and workspace team."
+        subtitle="Manage your account and preferences."
       />
       <div className="settings-workspace">
         <aside className="settings-navigation" aria-label="Settings sections">
@@ -1194,9 +1199,7 @@ export function Settings() {
                   ? "Personal details"
                   : item === "Security"
                     ? "Password and access"
-                    : item === "Appearance"
-                      ? "Theme preferences"
-                      : "Members and roles"}
+                    : "Theme preferences"}
               </span>
             </button>
           ))}
@@ -1350,173 +1353,8 @@ export function Settings() {
               </p>
             </Panel>
           )}
-          {section === "Team" && (
-            <>
-              {members.isPending ? (
-                <Loading />
-              ) : members.error ? (
-                <ErrorState error={members.error} retry={members.refetch} />
-              ) : (
-                <>
-                  <p className="settings-description">
-                    Manage who has access to your workspace and their role.
-                  </p>
-                  <Panel
-                    title="Team"
-                    action={
-                      user.role === "Administrator" ? (
-                        <MemberManager />
-                      ) : undefined
-                    }
-                  >
-                    {members.data?.data.map((m: any) => (
-                      <div className="record-row" key={m.user.id}>
-                        <Avatar name={m.user.name} />
-                        <span>
-                          <strong>{m.user.name}</strong>
-                          <small>
-                            {m.role}
-                            {m.user.active === false && " · Deactivated"}
-                          </small>
-                        </span>
-                        {user.role === "Administrator" &&
-                          m.user.id !== user.userId && (
-                            <>
-                              <select
-                                aria-label={"Role for " + m.user.name}
-                                className="role-select"
-                                value={m.role}
-                                onChange={async (e) => {
-                                  try {
-                                    await write.mutateAsync({
-                                      path: "/members/" + m.id,
-                                      method: "PATCH",
-                                      body: { role: e.target.value },
-                                    });
-                                    toast("Role updated");
-                                  } catch {
-                                    /* Render error */
-                                  }
-                                }}
-                              >
-                                {memberRoles.map((r) => (
-                                  <option key={r}>{r}</option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className="small"
-                                disabled={write.isPending}
-                                onClick={async () => {
-                                  const active = m.user.active === false;
-                                  if (
-                                    !active &&
-                                    !window.confirm(
-                                      `Deactivate ${m.user.name}? They will be signed out and unable to sign in.`,
-                                    )
-                                  )
-                                    return;
-                                  try {
-                                    await write.mutateAsync({
-                                      path: "/members/" + m.id,
-                                      method: "PATCH",
-                                      body: { active },
-                                    });
-                                    toast(
-                                      active
-                                        ? "Member reactivated"
-                                        : "Member deactivated",
-                                    );
-                                  } catch {
-                                    /* Render error */
-                                  }
-                                }}
-                              >
-                                {m.user.active === false
-                                  ? "Reactivate"
-                                  : "Deactivate"}
-                              </button>
-                            </>
-                          )}
-                      </div>
-                    ))}
-                  </Panel>
-                  <FormError error={write.error} />
-                </>
-              )}
-            </>
-          )}
-          <div className="settings-context">
-            <span>Workspace timezone</span>
-            <strong>{user.timezone}</strong>
-            <small>Used for schedules, reminders and activity dates.</small>
-          </div>
         </div>
       </div>
     </div>
-  );
-}
-
-const memberRoles = ["Administrator", "Adviser", "Operations"];
-function MemberManager() {
-  const [show, setShow] = useState(false),
-    write = useWrite(),
-    toast = useToast();
-  return (
-    <>
-      <button className="small" onClick={() => setShow(true)}>
-        Add Member
-      </button>
-      {show && (
-        <Modal title="Create Workspace Member" onClose={() => setShow(false)}>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                await write.mutateAsync({
-                  path: "/members",
-                  body: Object.fromEntries(new FormData(e.currentTarget)),
-                });
-                setShow(false);
-                toast("Member created. Share the initial password securely.");
-              } catch {
-                /* Render error */
-              }
-            }}
-          >
-            <label>
-              Full Name
-              <input name="name" required minLength={2} />
-            </label>
-            <label>
-              Email Address
-              <input name="email" type="email" required />
-            </label>
-            <label>
-              Role
-              <select name="role" defaultValue="Operations">
-                {memberRoles.map((role) => <option key={role}>{role}</option>)}
-              </select>
-            </label>
-            <label>
-              Unique Initial Password
-              <input
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                required
-              />
-            </label>
-            <p className="muted">
-              Use a unique password and share it through a secure channel. The
-              member can change it in account settings.
-            </p>
-            <FormError error={write.error} />
-            <Submit busy={write.isPending}>Create Member</Submit>
-          </form>
-        </Modal>
-      )}
-    </>
   );
 }

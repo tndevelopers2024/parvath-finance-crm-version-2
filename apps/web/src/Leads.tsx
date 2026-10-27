@@ -112,7 +112,7 @@ export default function Leads() {
             icon: "hot",
             note: "Need attention",
             tone: "rose",
-            to: "/leads?priority=High",
+            to: "/leads?priority=Hot",
           },
           {
             label: "Converted",
@@ -161,11 +161,9 @@ export default function Leads() {
             </div>
           </div>
           <div className="lead-board" ref={boardRef}>
-            {stages.map((s, i) =>
-              s === "Qualified" ? null : (
-                <LeadColumn key={s} stage={s} index={i} filters={filters} />
-              ),
-            )}
+            {stages.map((s, i) => (
+              <LeadColumn key={s} stage={s} index={i} filters={filters} />
+            ))}
           </div>
         </DndContext>
       }

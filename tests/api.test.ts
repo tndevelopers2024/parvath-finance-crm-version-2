@@ -1096,6 +1096,9 @@ describe("Authenticated MongoDB workflows", () => {
         leads: true,
       });
       expect(after.renewalsDue).toBe(before.renewalsDue + total);
+      expect(after.renewalsNext7Days).toBe(before.renewalsNext7Days + total);
+      expect(after.renewalsToday).toBe(before.renewalsToday);
+      expect(after.premiumTodayMinor).toBe(before.premiumTodayMinor);
       expect(BigInt(after.premiumDueMinor)).toBe(
         BigInt(before.premiumDueMinor) + BigInt(total) * 100n,
       );
@@ -1457,9 +1460,12 @@ describe("Authenticated MongoDB workflows", () => {
       opportunityId: l.body.data.id,
     });
     expect(f.status).toBe(201);
+    // Adding the linked task updates the lead summary and its optimistic version.
+    const current = (await admin.get(`/api/leads/${l.body.data.id}`)).body.data;
+    expect(current.nextFollowUp).toBe("2026-09-10T05:00:00.000Z");
     const lost = await write(`/leads/${l.body.data.id}/stage`, {
       stage: "Lost",
-      version: l.body.data.version,
+      version: current.version,
       reason: "Chose another adviser",
     });
     expect(lost.status).toBe(200);

@@ -34,8 +34,7 @@ export default function CalendarPage() {
   const [filter, setFilter] = useState("All"),
     [search, setSearch] = useState(""),
     [view, setView] = useState("Month");
-  if (!payload && q.error)
-    return <ErrorState error={q.error} retry={q.refetch} />;
+  if (q.error) return <ErrorState error={q.error} retry={q.refetch} />;
   if (!payload) return <Loading layout="calendar" />;
   const d = payload.data,
     selected = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "")
@@ -131,6 +130,7 @@ export default function CalendarPage() {
           </Link>
         }
       />
+      {q.isPending && <p role="status">Updating calendar…</p>}
       <Panel className="calendar-workspace">
         <div className="calendar-page-toolbar">
           <div className="calendar-month-controls">

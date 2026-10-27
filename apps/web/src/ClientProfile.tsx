@@ -143,13 +143,15 @@ export default function ClientProfile() {
     <Panel
       title={`Products (${c.products.length})`}
       action={
-        <Link
-          className="button primary small"
-          to={`/products/new?clientId=${id}`}
-        >
-          <Plus size={14} />
-          Add policy / account
-        </Link>
+        user.role !== "Operations" && (
+          <Link
+            className="button primary small"
+            to={`/products/new?clientId=${id}`}
+          >
+            <Plus size={14} />
+            Add policy / account
+          </Link>
+        )
       }
     >
       {c.products.length ? (

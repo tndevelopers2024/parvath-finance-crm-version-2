@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   clientSchema,
   opportunitySchema,
+  opportunityUpdateSchema,
   followupSchema,
   productSchema,
   eventSchema,
@@ -14,6 +15,7 @@ const schemas = Object.fromEntries(
   Object.entries({
     Client: clientSchema,
     Opportunity: opportunitySchema,
+    OpportunityUpdate: opportunityUpdateSchema,
     FollowUp: followupSchema,
     Product: productSchema,
     FinancialEvent: eventSchema,
@@ -117,7 +119,7 @@ for (const [name, schema] of [
       "/" + name + "/{id}",
       "patch",
       "Update with optimistic version",
-      schema,
+      name === "leads" ? "OpportunityUpdate" : schema,
     );
   else
     add(

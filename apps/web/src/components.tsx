@@ -326,7 +326,9 @@ export function InfiniteScroll({
     const el = ref.current;
     const content = el?.firstElementChild as HTMLElement | null;
     if (!el || !content) return;
-    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     if (reducedMotion) return;
 
     const lenis = new Lenis({
@@ -797,6 +799,8 @@ export function Tip({
   );
 }
 export function ExportButton({ module }: { module: string }) {
+  const user = useAuth();
+  if (user.role === "Operations") return null;
   return (
     <a className="button" href={`/api/reports/export?module=${module}`}>
       <Download size={16} />
@@ -892,6 +896,7 @@ export function ClientCombobox({
   initialClient,
   className = "",
   autoFocus = false,
+  createClientHref = "/clients/new",
 }: {
   value?: string;
   onChange: (clientId: string, client?: ClientItem | null) => void;
@@ -903,7 +908,10 @@ export function ClientCombobox({
   initialClient?: ClientItem | null;
   className?: string;
   autoFocus?: boolean;
+  createClientHref?: string;
 }) {
+  const user = useAuth();
+  const canCreate = user.role !== "Operations";
   const [open, setOpen] = useState(false);
   const [selectionError, setSelectionError] = useState(false);
   const listId = useId();
@@ -934,7 +942,9 @@ export function ClientCombobox({
     if (!menu) return;
     menu.showPopover?.();
     const place = () => {
-      const anchor = containerRef.current?.querySelector(".client-combobox-input-wrap");
+      const anchor = containerRef.current?.querySelector(
+        ".client-combobox-input-wrap",
+      );
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
       const viewport = window.visualViewport;
@@ -952,8 +962,13 @@ export function ClientCombobox({
       const room = Math.max(0, upward ? above : below);
       menu.style.width = Math.min(rect.width, width - 16) + "px";
       menu.style.maxHeight = Math.min(340, room) + "px";
-      menu.style.left = Math.max(left + 8, Math.min(rect.left, left + width - menu.offsetWidth - 8)) + "px";
-      menu.style.top = (upward ? rect.top - menu.offsetHeight - 6 : rect.bottom + 6) + "px";
+      menu.style.left =
+        Math.max(
+          left + 8,
+          Math.min(rect.left, left + width - menu.offsetWidth - 8),
+        ) + "px";
+      menu.style.top =
+        (upward ? rect.top - menu.offsetHeight - 6 : rect.bottom + 6) + "px";
     };
     place();
     const observer = new ResizeObserver(place);
@@ -973,8 +988,8 @@ export function ClientCombobox({
 
   useEffect(() => {
     if (open && highlightedIndex >= 0) {
-      dropdownRef.current?.querySelectorAll('[role="option"]')[highlightedIndex]
-        ?.scrollIntoView({ block: "nearest" });
+      const options = dropdownRef.current?.querySelectorAll('[role="option"]');
+      options?.[highlightedIndex]?.scrollIntoView({ block: "nearest" });
     }
   }, [open, highlightedIndex]);
 
@@ -1078,10 +1093,16 @@ export function ClientCombobox({
       ref={containerRef}
       className={`client-combobox ${className} ${open ? "is-open" : ""}`}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setOpen(false);
       }}
     >
-      <input type="hidden" name={name} value={value || ""} disabled={disabled} />
+      <input
+        type="hidden"
+        name={name}
+        value={value || ""}
+        disabled={disabled}
+      />
 
       {value && selectedClient && !open ? (
         <div
@@ -1164,7 +1185,11 @@ export function ClientCombobox({
             aria-expanded={open}
             aria-autocomplete="list"
             aria-controls={open ? listId : undefined}
-            aria-activedescendant={open && highlightedIndex >= 0 ? `${listId}-${highlightedIndex}` : undefined}
+            aria-activedescendant={
+              open && highlightedIndex >= 0
+                ? `${listId}-${highlightedIndex}`
+                : undefined
+            }
             aria-invalid={selectionError || undefined}
             aria-describedby={selectionError ? errorId : undefined}
             required={required && !value}
@@ -1275,7 +1300,9 @@ export function ClientCombobox({
       )}
 
       {selectionError && (
-        <small className="field-error" id={errorId}>Select a client from the list.</small>
+        <small className="field-error" id={errorId}>
+          Select a client from the list.
+        </small>
       )}
       {open && !disabled && (
         <div
@@ -1289,11 +1316,19 @@ export function ClientCombobox({
           }}
         >
           {clientsQuery.isPending ? (
-            <div className="client-combobox-empty" role="status"><Loading layout="inline" /> Loading clients…</div>
+            <div className="client-combobox-empty" role="status">
+              <Loading layout="inline" /> Loading clients…
+            </div>
           ) : clientsQuery.error ? (
             <div className="client-combobox-empty" role="alert">
               <p>Unable to load clients. Please try again.</p>
-              <button type="button" className="button small" onClick={() => void clientsQuery.refetch()}>Retry</button>
+              <button
+                type="button"
+                className="button small"
+                onClick={() => void clientsQuery.refetch()}
+              >
+                Retry
+              </button>
             </div>
           ) : filteredClients.length > 0 ? (
             <div
@@ -1385,27 +1420,31 @@ export function ClientCombobox({
                 </p>
                 <small>Check the search query or create a new client</small>
               </div>
-              <Link
-                to="/clients/new"
-                className="button small primary client-combobox-add-btn"
-                onClick={() => setOpen(false)}
-              >
-                <Plus size={14} />
-                Add New Client
-              </Link>
+              {canCreate && (
+                <Link
+                  to={createClientHref}
+                  className="button small primary client-combobox-add-btn"
+                  onClick={() => setOpen(false)}
+                >
+                  <Plus size={14} />
+                  Add New Client
+                </Link>
+              )}
             </div>
           )}
 
-          <div className="client-combobox-footer">
-            <Link
-              to="/clients/new"
-              className="client-combobox-footer-action"
-              onClick={() => setOpen(false)}
-            >
-              <UserPlus size={14} />
-              <span>+ Add New Client</span>
-            </Link>
-          </div>
+          {canCreate && (
+            <div className="client-combobox-footer">
+              <Link
+                to={createClientHref}
+                className="client-combobox-footer-action"
+                onClick={() => setOpen(false)}
+              >
+                <UserPlus size={14} />
+                <span>+ Add New Client</span>
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

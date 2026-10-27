@@ -81,11 +81,16 @@ export function NewClientPopup() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const category = params.get("productCategory");
+  const returnToProduct =
+    !!category || params.get("returnTo") === "/products/new";
   const close = () =>
     navigate(
-      category
+      returnToProduct
         ? "/products/new?" +
-            query({ category, definitionId: params.get("definitionId") })
+            query({
+              category: category || undefined,
+              definitionId: params.get("definitionId"),
+            })
         : "/clients",
     );
   useEffect(() => {
@@ -97,7 +102,11 @@ export function NewClientPopup() {
   }, []);
   return (
     <>
-      {category ? <ProductClients category={category} /> : <Clients />}
+      {returnToProduct ? (
+        <ProductClients category={category || undefined} />
+      ) : (
+        <Clients />
+      )}
       <Modal
         title="Add New Client"
         className="client-onboarding-popup"
@@ -365,7 +374,8 @@ export default function ClientForm({
       navigate(
         id
           ? "/clients/" + result.data.id
-          : productParams.get("productCategory")
+          : productParams.get("productCategory") ||
+              productParams.get("returnTo") === "/products/new"
             ? "/products/new?" +
               query({
                 clientId: result.data.id,

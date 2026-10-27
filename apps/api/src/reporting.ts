@@ -239,6 +239,9 @@ reporting.get("/dashboard", async (req, res) => {
                     },
                   },
                   n: { $sum: 1 },
+                  today: {
+                    $sum: { $cond: [{ $eq: ["$dueDate", todayDate] }, 1, 0] },
+                  },
                 },
               },
             ],
@@ -280,6 +283,20 @@ reporting.get("/dashboard", async (req, res) => {
                   total: {
                     $sum: {
                       $cond: [{ $gt: ["$owed", zero] }, "$owed", zero],
+                    },
+                  },
+                  todayTotal: {
+                    $sum: {
+                      $cond: [
+                        {
+                          $and: [
+                            { $eq: ["$dueDate", todayDate] },
+                            { $gt: ["$owed", zero] },
+                          ],
+                        },
+                        "$owed",
+                        zero,
+                      ],
                     },
                   },
                 },
@@ -517,6 +534,11 @@ reporting.get("/dashboard", async (req, res) => {
       won: leadCount((s) => s === "Won"),
       lost: leadCount((s) => s === "Lost"),
       renewalsDue: bins.reduce((a, b) => a + b.count, 0),
+      renewalsToday: ev.bins?.find((b: any) => Number(b._id) === 0)?.today ?? 0,
+      renewalsNext7Days: bins[0].count,
+      premiumTodayMinor: big(
+        ev.premium?.find((p: any) => p._id === "due")?.todayTotal,
+      ),
       renewedEvents,
       premiumDueMinor: premium("due"),
       premiumOverdueMinor: premium("overdue"),

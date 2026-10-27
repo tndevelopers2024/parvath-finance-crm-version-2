@@ -70,6 +70,13 @@ export function NewRecord({
   const productBack = category
     ? "/products/category/" + encodeURIComponent(category)
     : "/products";
+  const createClientHref =
+    "/clients/new?" +
+    query({
+      productCategory: type === "products" ? category || undefined : undefined,
+      definitionId: type === "products" ? definitionId || undefined : undefined,
+      returnTo: type === "products" ? "/products/new" : undefined,
+    });
   const title =
     type === "leads"
       ? "Add Lead"
@@ -148,18 +155,9 @@ export function NewRecord({
                   if (error) setError("");
                 }}
                 required
+                createClientHref={createClientHref}
               />
-              <Link
-                className="text-link"
-                to={
-                  "/clients/new?" +
-                  query({
-                    productCategory: type === "products" ? category : undefined,
-                    definitionId:
-                      type === "products" ? definitionId : undefined,
-                  })
-                }
-              >
+              <Link className="text-link" to={createClientHref}>
                 Create a new client
               </Link>
             </label>
@@ -281,7 +279,9 @@ export function NewRecord({
                   <ProductSelect
                     value={definitionId}
                     onChange={setDefinitionId}
-                    plans={(catalogue.data?.data || []).filter((d: any) => !category || d.category === category)}
+                    plans={(catalogue.data?.data || []).filter(
+                      (d: any) => !category || d.category === category,
+                    )}
                     loading={catalogue.isPending}
                     error={catalogue.error}
                     onRetry={() => void catalogue.refetch()}
@@ -326,7 +326,12 @@ export function NewRecord({
             {formReady ? (
               <Submit busy={write.isPending}>{title}</Submit>
             ) : (
-              <button className="primary" type="button" disabled aria-label="Loading form">
+              <button
+                className="primary"
+                type="button"
+                disabled
+                aria-label="Loading form"
+              >
                 <Loading layout="inline" />
               </button>
             )}
@@ -618,7 +623,13 @@ export function LeadDetail() {
                 await write.mutateAsync({
                   path: `/leads/${id}`,
                   method: "PATCH",
-                  body: { ...f, version: l.version },
+                  body: {
+                    ...f,
+                    nextFollowUp: f.nextFollowUp
+                      ? localISO(f.nextFollowUp)
+                      : null,
+                    version: l.version,
+                  },
                 });
                 setEdit(false);
               } catch {
@@ -642,6 +653,24 @@ export function LeadDetail() {
             <label>
               Next Action
               <input name="nextAction" defaultValue={l.nextAction} required />
+            </label>
+            <label>
+              Next Follow-up
+              <DateField
+                withTime
+                name="nextFollowUp"
+                defaultValue={
+                  l.nextFollowUp
+                    ? new Date(new Date(l.nextFollowUp).getTime() + 19800000)
+                        .toISOString()
+                        .slice(0, 16)
+                    : ""
+                }
+              />
+              <small>
+                Clearing this date cancels pending follow-ups linked to this
+                opportunity.
+              </small>
             </label>
             <label>
               Notes
@@ -1422,12 +1451,10 @@ export function ProductDetail() {
                           identifier: f.identifier,
                           status: f.status,
                           startDate: f.startDate,
-                          premiumMinor: f.premium
-                            ? toMinor(f.premium)
-                            : undefined,
+                          premiumMinor: f.premium ? toMinor(f.premium) : null,
                           principalMinor: f.principal
                             ? toMinor(f.principal)
-                            : undefined,
+                            : null,
                           expectedCommissionMinor: toMinor(f.commission || "0"),
                           version: p.version,
                         },

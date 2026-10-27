@@ -1,15 +1,7 @@
 import WhatsAppIcon from "./WhatsAppIcon";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarDays, Mail, Phone } from "lucide-react";
-import {
-  date,
-  query,
-  rupees,
-  time,
-  todayIST,
-  useData,
-  useInfiniteData,
-} from "./api";
+import { date, query, rupees, time, useData, useInfiniteData } from "./api";
 import DateField from "./DateField";
 import DebouncedSearch from "./DebouncedSearch";
 import {
@@ -58,36 +50,18 @@ export default function Worklists({
       { replace },
     );
   const d = stats.data?.data || {},
-    events = d.events || [],
-    today = d.today || todayIST();
-  const pending = events.filter((e: any) => e.status === "Pending");
-  const rangeEvents = (days: number) =>
-    pending.filter(
-      (e: any) =>
-        e.dueDate.slice(0, 10) >= today &&
-        e.dueDate.slice(0, 10) <
-          new Date(new Date(today).getTime() + days * 86400000)
-            .toISOString()
-            .slice(0, 10),
-    );
+    events = d.events || [];
   const cards = renewal
     ? [
         {
           label: "Due Today",
-          value: rangeEvents(1).length,
+          value: d.renewalsToday,
           icon: "renewals",
           tone: "rose",
           // Outstanding balances from the API, so part-payments are netted
           // the same way everywhere; overdue premiums are a separate figure.
           note:
-            rupees(
-              rangeEvents(1)
-                .filter((e: any) => e.amountMeaning === "Premium due")
-                .reduce(
-                  (a: bigint, e: any) => a + BigInt(e.outstandingMinor),
-                  0n,
-                ),
-            ) +
+            rupees(d.premiumTodayMinor) +
             " premiums · " +
             rupees(d.premiumOverdueMinor) +
             " overdue",
@@ -95,7 +69,7 @@ export default function Worklists({
         },
         {
           label: "Due in 7 Days",
-          value: rangeEvents(7).length,
+          value: d.renewalsNext7Days,
           icon: "renewals",
           tone: "amber",
           note: "Including today",
@@ -103,7 +77,7 @@ export default function Worklists({
         },
         {
           label: "Due in 30 Days",
-          value: rangeEvents(30).length,
+          value: d.renewalsDue,
           icon: "renewals",
           tone: "blue",
           note: "Including today",

@@ -67,7 +67,12 @@ function Protected() {
     </AuthContext.Provider>
   );
 }
-const publicPaths = ["/login", "/signup", "/forgot-password", "/reset-password"];
+const publicPaths = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+];
 function App() {
   const [toast, setToast] = useState("");
   const navigate = useNavigate();
@@ -97,10 +102,16 @@ function App() {
       <SmoothScroll />
       <Suspense fallback={<Loading layout="workspace" />}>
         <Routes>
-          <Route path="/login" element={<Auth />} />
-          <Route path="/signup" element={<Auth mode="signup" />} />
-          <Route path="/forgot-password" element={<Auth mode="forgot" />} />
-          <Route path="/reset-password" element={<Auth mode="reset" />} />
+          <Route path="/login" element={<Auth key="login" />} />
+          <Route path="/signup" element={<Auth key="signup" mode="signup" />} />
+          <Route
+            path="/forgot-password"
+            element={<Auth key="forgot" mode="forgot" />}
+          />
+          <Route
+            path="/reset-password"
+            element={<Auth key="reset" mode="reset" />}
+          />
           <Route element={<Protected />}>
             <Route element={<Shell />}>
               <Route index element={<Navigate to="/dashboard" replace />} />

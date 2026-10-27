@@ -210,7 +210,7 @@ try {
   await page.goto(target + "/leads");
   await page.locator(".lead-board").waitFor();
   // Each stage pages by itself: the count is the stage's full total, cards arrive 25 at a time,
-  // and every card can be reached. Qualified stays hidden on purpose.
+  // and every card can be reached, including Qualified.
   const newColumn = page.getByRole("region", { name: "New Enquiries" });
   await newColumn.getByLabel("32 leads in New Enquiries").waitFor();
   // The column starts with one page of 25; scrolling may already have asked for more.
@@ -225,8 +225,7 @@ try {
         'section[aria-label="New Enquiries"] .lead-card',
       ).length === 32,
   );
-  if (await page.getByRole("region", { name: "Qualified" }).count())
-    throw Error("The Qualified column should stay hidden");
+  await page.getByRole("region", { name: "Qualified", exact: true }).waitFor();
   await page.getByRole("button", { name: "Collapse Contacted" }).click();
   await page.getByRole("button", { name: "Expand Contacted" }).click();
   await page.goto(target + "/leads?priority=High");
@@ -239,7 +238,7 @@ try {
     .getByLabel("0 leads in New Enquiries")
     .waitFor();
   console.log(
-    "PASS lead board paging, stage totals, filter and hidden Qualified",
+    "PASS lead board paging, stage totals, filter and visible Qualified",
   );
   await page.goto(target + "/clients/new");
   await page.getByRole("button", { name: "Next: Additional Details" }).click();
@@ -271,13 +270,10 @@ try {
         "Record Payment / Receipt",
         "Record payment / receipt",
       ],
-      ["/settings", "Add Member", "Create Workspace Member"],
       ["/products", "Add product", "Add product"],
       ["/providers", "Add provider", "Add provider"],
     ]) {
       await page.goto(target + path);
-      if (path === "/settings")
-        await page.getByRole("button", { name: /^Team/ }).click();
       if (action)
         await page.getByRole("button", { name: action, exact: true }).click();
       const dialog = page.getByRole("dialog", { name: title, exact: true });
@@ -347,7 +343,7 @@ try {
     }
   }
   console.log(
-    "Six dialog layouts, close buttons, choice alignment and mobile scrolling passed",
+    "Dialog layouts, close buttons, choice alignment and mobile scrolling passed",
   );
   if (errors.length) throw Error([...new Set(errors)].join("\n"));
   console.log("WORKSPACE VISUAL CHECK PASSED; screenshots: " + artifacts);

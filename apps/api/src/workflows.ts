@@ -3,6 +3,7 @@ import argon2 from "argon2";
 import { z } from "zod";
 import {
   opportunitySchema,
+  opportunityUpdateSchema,
   followupSchema,
   productSchema,
   eventSchema,
@@ -364,12 +365,12 @@ workflows.get("/leads", async (req, res) => {
     ? z.enum(stages).parse(req.query.stage)
     : undefined;
   const priority = req.query.priority
-    ? z.enum(["Normal", "High", "Urgent"]).parse(req.query.priority)
+    ? z.enum(["Normal", "High", "Urgent", "Hot"]).parse(req.query.priority)
     : undefined;
   const where = {
     organizationId: req.auth.organizationId,
     stage,
-    priority,
+    priority: priority === "Hot" ? { in: ["High", "Urgent"] } : priority,
     ...(req.query.clientId
       ? { clientId: z.uuid().parse(req.query.clientId) }
       : {}),
@@ -472,26 +473,95 @@ workflows.get("/leads/:id", async (req, res) => {
   });
   res.json({ data: { ...row, client: flattenClient(row.client) } });
 });
+// Keep the opportunity's summary date aligned with its earliest pending task.
+// Updating the opportunity in the same transaction also serializes concurrent task changes.
+async function syncOpportunityFollowup(tx: any, opportunityId?: string | null) {
+  if (!opportunityId) return;
+  const opportunity = await tx.opportunity.findUnique({
+    where: { id: opportunityId },
+  });
+  if (!opportunity) return;
+  const next = await tx.followUp.findFirst({
+    where: { opportunityId, state: "pending" },
+    orderBy: { dueAt: "asc" },
+  });
+  await tx.opportunity.update({
+    where: { id: opportunityId },
+    data: { nextFollowUp: next?.dueAt ?? null, version: { increment: 1 } },
+  });
+}
+
 workflows.patch("/leads/:id", permit("edit"), async (req, res) => {
   const old = await owned("opportunity", String(req.params.id), req);
-  const v = opportunitySchema
-    .omit({ clientId: true, stage: true })
-    .extend({ version: z.number().int() })
-    .parse(req.body);
+  const v = opportunityUpdateSchema.parse(req.body);
   await validOwner(v.ownerId, req, old.ownerId);
   if (["Won", "Lost"].includes(old.stage))
     throw new HttpError(409, "Reopen the opportunity before editing");
-  const { version, ...data } = v;
-  const r = await db.opportunity.updateMany({
-    where: { id: old.id, version },
-    data: {
-      ...data,
-      nextFollowUp: data.nextFollowUp ? new Date(data.nextFollowUp) : undefined,
-      version: { increment: 1 },
-    },
+  const { version, nextFollowUp, ...data } = v;
+  await db.transaction(async (tx) => {
+    await holdClient(tx, old.clientId, req);
+    const r = await tx.opportunity.updateMany({
+      where: { id: old.id, version },
+      data: { ...data, version: { increment: 1 } },
+    });
+    if (!r.count)
+      throw new HttpError(409, "Opportunity changed; refresh before editing");
+    const task = await tx.followUp.findFirst({
+      where: { opportunityId: old.id, state: "pending" },
+      orderBy: { dueAt: "asc" },
+    });
+    if (nextFollowUp === null) {
+      await tx.followUp.updateMany({
+        where: { opportunityId: old.id, state: "pending" },
+        data: {
+          state: "cancelled",
+          outcome: "Not needed",
+          completedAt: now(),
+          version: { increment: 1 },
+        },
+      });
+    } else if (task || nextFollowUp) {
+      const dueAt = nextFollowUp ? new Date(nextFollowUp) : task!.dueAt;
+      const channel = task?.channel || "Call";
+      if (nextFollowUp)
+        assertContactAllowed(
+          await tx.client.findUniqueOrThrow({ where: { id: old.clientId } }),
+          channel,
+          dueAt,
+          req.auth.timezone,
+        );
+      const taskData = {
+        dueAt,
+        ownerId: data.ownerId,
+        notes: data.nextAction,
+        priority: data.priority,
+      };
+      if (task)
+        await tx.followUp.update({
+          where: { id: task.id },
+          data: { ...taskData, version: { increment: 1 } },
+        });
+      else
+        await tx.followUp.create({
+          data: {
+            ...taskData,
+            channel,
+            organizationId: req.auth.organizationId,
+            clientId: old.clientId,
+            opportunityId: old.id,
+          },
+        });
+    }
+    await syncOpportunityFollowup(tx, old.id);
+    await audit(
+      tx,
+      req,
+      "update",
+      "Opportunity",
+      old.id,
+      "Opportunity and next follow-up updated",
+    );
   });
-  if (!r.count)
-    throw new HttpError(409, "Opportunity changed; refresh before editing");
   res.json({ data: { success: true } });
 });
 workflows.post("/leads/:id/stage", permit("edit"), async (req, res) => {
@@ -825,10 +895,18 @@ workflows.patch("/products/:id", permit("edit"), async (req, res) => {
       data: {
         ...data,
         startDate: dateOnly(data.startDate),
-        premiumMinor: data.premiumMinor ? BigInt(data.premiumMinor) : undefined,
-        principalMinor: data.principalMinor
-          ? BigInt(data.principalMinor)
-          : undefined,
+        premiumMinor:
+          data.premiumMinor === undefined
+            ? undefined
+            : data.premiumMinor === null
+              ? null
+              : BigInt(data.premiumMinor),
+        principalMinor:
+          data.principalMinor === undefined
+            ? undefined
+            : data.principalMinor === null
+              ? null
+              : BigInt(data.principalMinor),
         expectedCommissionMinor: BigInt(data.expectedCommissionMinor),
         version: { increment: 1 },
       },
@@ -1561,6 +1639,7 @@ workflows.post("/followups", permit("operate"), async (req, res) => {
         organizationId: req.auth.organizationId,
       },
     });
+    await syncOpportunityFollowup(tx, row.opportunityId);
     await audit(tx, req, "create", "FollowUp", row.id, "Follow-up scheduled");
     return row;
   });
@@ -1612,6 +1691,7 @@ workflows.patch("/followups/:id", permit("operate"), async (req, res) => {
     });
     if (!change.count)
       throw new HttpError(409, "Follow-up changed; refresh before editing");
+    await syncOpportunityFollowup(tx, f.opportunityId);
     await audit(
       tx,
       req,
@@ -1693,6 +1773,7 @@ workflows.post(
             createdAt: now(),
           },
         });
+      await syncOpportunityFollowup(tx, f.opportunityId);
       await audit(
         tx,
         req,

@@ -322,6 +322,12 @@ export const opportunitySchema = z.object({
   nextFollowUp: z.iso.datetime().optional(),
   stage: z.enum(stages).default("New Enquiries"),
 });
+export const opportunityUpdateSchema = opportunitySchema
+  .omit({ clientId: true, stage: true })
+  .extend({
+    version: z.number().int(),
+    nextFollowUp: z.iso.datetime().nullable().optional(),
+  });
 export const followupSchema = z.object({
   clientId: z.uuid(),
   ownerId: z.uuid(),
@@ -342,8 +348,8 @@ export const productSchema = z.object({
   identifier: z.string().trim().min(3).max(100),
   status: z.enum(["Application", "Active", "Closed"]).default("Application"),
   startDate: businessDate,
-  premiumMinor: money.optional(),
-  principalMinor: money.optional(),
+  premiumMinor: money.nullable().optional(),
+  principalMinor: money.nullable().optional(),
   expectedCommissionMinor: money.default("0"),
   insuranceDetails: z
     .object({

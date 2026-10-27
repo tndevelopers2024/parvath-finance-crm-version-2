@@ -163,6 +163,9 @@ export const dashboard = {
   individuals: 1190,
   businesses: 58,
   renewalsDue: 24,
+  renewalsToday: 4,
+  renewalsNext7Days: 12,
+  premiumTodayMinor: "1200000",
   activeLeads: 38,
   hotLeads: 7,
   followupsToday: 12,
@@ -269,7 +272,11 @@ export function response(path, params = new URLSearchParams()) {
     const matching = leads
       .filter((l) => !params.get("stage") || l.stage === params.get("stage"))
       .filter(
-        (l) => !params.get("priority") || l.priority === params.get("priority"),
+        (l) =>
+          !params.get("priority") ||
+          (params.get("priority") === "Hot"
+            ? ["High", "Urgent"].includes(l.priority)
+            : l.priority === params.get("priority")),
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const limit = Number(params.get("limit") || 50),

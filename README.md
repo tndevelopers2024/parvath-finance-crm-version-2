@@ -67,6 +67,7 @@ npm test
 npm run build
 npx playwright install chromium
 npm run test:ui
+npm run test:workflow-ui  # regression checks using synthetic API responses
 npm run test:browser -- journeys   # writes synthetic records; see docs/browser-journeys.md
 npm run test:sweep                 # every page, with seeded data; see docs/browser-sweep.md
 npm run demo:cleanup -- --confirm-db=<MONGODB_DB>

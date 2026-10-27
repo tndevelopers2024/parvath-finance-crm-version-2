@@ -25,19 +25,23 @@ Commit POST `/clients/import/{id}/commit` creates clients in chunks of 20 rows, 
 
 ## Opportunities
 
+The lead list accepts `priority=Hot` to include both High and Urgent opportunities. Every supported stage, including Qualified, is available on the board.
+
 Create: `{clientId,requirement,ownerId,priority,source,notes?,nextAction,nextFollowUp?,stage?}`. Closed initial stages are rejected. Stage action: `{stage,version,reason?}`. Lost and reopening require a reason. Won must use conversion rather than direct stage movement.
 
 `POST /leads/{id}/convert`: `{version,accepted:true,definitionId,identifier}`. Client acceptance is recorded, the existing identity is reused, and one product Application is linked through a unique opportunityId. Retried conversion returns that same product.
 
+Editing a lead synchronizes its next action, owner, priority and optional next-follow-up date with the earliest pending linked task. An omitted date keeps that task's date; `nextFollowUp:null` cancels pending linked tasks. Creating, rescheduling, completing or cancelling a linked task updates the lead's summary date to its earliest pending task (or null). These changes are transactional and increment the lead version.
+
 ## Products and financial events
 
-Product schemas distinguish premiumMinor, principalMinor, expectedCommissionMinor and structured subtype details. All money is an exact nonnegative integer string in paise. Product identifiers are unique inside the workspace.
+Product schemas distinguish premiumMinor, principalMinor, expectedCommissionMinor and structured subtype details. All money is an exact nonnegative integer string in paise. Product identifiers are unique inside the workspace. On product edits, omit `premiumMinor`/`principalMinor` to preserve them, send null to clear them, or send `"0"` to record an explicit zero.
 
 Create event: `{productId,type,dueDate,amountMinor,recurrenceMonths?}`. The backend assigns amountMeaning and validates event category. Dates are valid ISO calendar dates, not timestamps. A `Closed` product returns 400. A product holds one event per type and due date; a clash returns 409 naming the date, and says so when the event occupying it is cancelled.
 
 Event status is `Pending`, `Confirmed` or `Cancelled`. Only pending events count as due, overdue, premium due or expected revenue. `GET /renewals?range=` accepts All (every status), Today, Tomorrow, Next 7 Days, Next 30 Days, Overdue (pending only), Renewed (confirmed) and Cancelled; computed `timing` is `Cancelled` for a cancelled event. Optional `from` and `to` (`YYYY-MM-DD`, inclusive due dates) may be given together or alone and narrow the range rather than replace it; an invalid date is 422 and `from` after `to` is 400.
 
-Balances: `GET /renewals` and `GET /renewals/{id}` return `paidMinor` (net of reversals) and `outstandingMinor` (amount less net payments, never negative, `0` once the event is confirmed or cancelled) on every event. `GET /dashboard` returns `outstandingMinor` on each entry of `events`, `premiumDueMinor` (outstanding on pending premium events due in [today, today + 30 days)) and `premiumOverdueMinor` (outstanding on pending premium events due before today). `renewalsDue` remains a count of events in the 30-day window.
+Balances: `GET /renewals` and `GET /renewals/{id}` return `paidMinor` (net of reversals) and `outstandingMinor` (amount less net payments, never negative, `0` once the event is confirmed or cancelled) on every event. `GET /dashboard` also returns exact `renewalsToday`, `renewalsNext7Days`, `renewalsDue` (30 days), and `premiumTodayMinor` (net premium outstanding today). These totals do not depend on the bounded calendar-event list. `GET /dashboard` returns `outstandingMinor` on each entry of `events`, `premiumDueMinor` (outstanding on pending premium events due in [today, today + 30 days)) and `premiumOverdueMinor` (outstanding on pending premium events due before today). `renewalsDue` remains a count of events in the 30-day window.
 
 Correct event: `PATCH /renewals/{id}` with `{version,dueDate?,amountMinor?,recurrenceMonths?}` and edit permission. At least one field is required; an omitted field is unchanged and `recurrenceMonths:null` makes the event one-time. Product and type cannot be changed. Only pending events can be corrected (400 otherwise). The amount cannot go below the payments already recorded (400), a loan review stays at zero, and a due date already used by another event of the same type on the product returns 409 naming it. A stale `version` returns 409. Moving the due date cancels the event's pending reminders; the count is returned in `meta.remindersCancelled`. The change is written to the activity log.
 

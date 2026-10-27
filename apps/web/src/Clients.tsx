@@ -240,7 +240,7 @@ export default function Clients() {
             </label>
           </div>
         )}
-        {selected.length > 0 && (
+        {canDelete && selected.length > 0 && (
           <div className="selection-bar">
             {selected.length} selected{" "}
             <button onClick={() => setBulk(true)}>
@@ -266,29 +266,31 @@ export default function Clients() {
               <table className="clients-table">
                 <thead>
                   <tr>
-                    <th>
-                      <input
-                        type="checkbox"
-                        aria-label="Select all loaded clients"
-                        checked={
-                          !!results.data.data.length &&
-                          results.data.data.every((c: any) =>
-                            selected.includes(c.id),
-                          )
-                        }
-                        onChange={(e) =>
-                          setSelected(
-                            e.target.checked
-                              ? [
-                                  ...new Set<string>(
-                                    results.data.data.map((c: any) => c.id),
-                                  ),
-                                ]
-                              : [],
-                          )
-                        }
-                      />
-                    </th>
+                    {canDelete && (
+                      <th>
+                        <input
+                          type="checkbox"
+                          aria-label="Select all loaded clients"
+                          checked={
+                            !!results.data.data.length &&
+                            results.data.data.every((c: any) =>
+                              selected.includes(c.id),
+                            )
+                          }
+                          onChange={(e) =>
+                            setSelected(
+                              e.target.checked
+                                ? [
+                                    ...new Set<string>(
+                                      results.data.data.map((c: any) => c.id),
+                                    ),
+                                  ]
+                                : [],
+                            )
+                          }
+                        />
+                      </th>
+                    )}
                     <th>
                       <button
                         className="table-sort"
@@ -320,20 +322,22 @@ export default function Clients() {
                       )[0];
                     return (
                       <tr key={c.id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${c.name}`}
-                            checked={selected.includes(c.id)}
-                            onChange={(e) =>
-                              setSelected(
-                                e.target.checked
-                                  ? [...selected, c.id]
-                                  : selected.filter((i) => i !== c.id),
-                              )
-                            }
-                          />
-                        </td>
+                        {canDelete && (
+                          <td>
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${c.name}`}
+                              checked={selected.includes(c.id)}
+                              onChange={(e) =>
+                                setSelected(
+                                  e.target.checked
+                                    ? [...selected, c.id]
+                                    : selected.filter((i) => i !== c.id),
+                                )
+                              }
+                            />
+                          </td>
+                        )}
                         <td>
                           <Link
                             className="person-cell"
@@ -419,7 +423,7 @@ export default function Clients() {
           </InfiniteScroll>
         )}
       </Panel>
-      {bulk && (
+      {canDelete && bulk && (
         <Modal title="Update selected clients" onClose={() => setBulk(false)}>
           <p>
             Change the status of {selected.length} selected clients. Existing

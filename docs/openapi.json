@@ -697,6 +697,75 @@
           "nextAction"
         ]
       },
+      "OpportunityUpdate": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "requirement": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 200
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "priority": {
+            "default": "Normal",
+            "type": "string",
+            "enum": [
+              "Normal",
+              "High",
+              "Urgent"
+            ]
+          },
+          "source": {
+            "default": "Referral",
+            "type": "string",
+            "maxLength": 80
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nextAction": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 300
+          },
+          "nextFollowUp": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "requirement",
+          "ownerId",
+          "nextAction",
+          "version"
+        ]
+      },
       "FollowUp": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -796,12 +865,26 @@
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
           },
           "premiumMinor": {
-            "type": "string",
-            "pattern": "^\\d{1,15}$"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,15}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "principalMinor": {
-            "type": "string",
-            "pattern": "^\\d{1,15}$"
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,15}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "expectedCommissionMinor": {
             "default": "0",
@@ -1583,7 +1666,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Opportunity"
+                "$ref": "#/components/schemas/OpportunityUpdate"
               }
             }
           }
