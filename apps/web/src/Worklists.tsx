@@ -1,5 +1,6 @@
+import WhatsAppIcon from "./WhatsAppIcon";
 import { Link, useSearchParams } from "react-router-dom";
-import { CalendarDays, Mail, MessageCircle, Phone } from "lucide-react";
+import { CalendarDays, Mail, Phone } from "lucide-react";
 import {
   date,
   query,
@@ -330,7 +331,7 @@ export default function Worklists({
                             : r.channel === "Email"
                               ? Mail
                               : r.channel === "WhatsApp"
-                                ? MessageCircle
+                                ? WhatsAppIcon
                                 : CalendarDays;
                         return (
                           <tr key={r.id}>

@@ -1,8 +1,8 @@
+import WhatsAppIcon from "./WhatsAppIcon";
 import { Link, useParams } from "react-router-dom";
 import {
   CalendarDays,
   Check,
-  MessageCircle,
   PackagePlus,
   UserRound,
 } from "lucide-react";
@@ -38,7 +38,7 @@ export default function ClientSuccess() {
             Schedule Follow-up
           </Link>
           <Link to={`/engagement/new?clientId=${id}`}>
-            <MessageCircle size={23} />
+            <WhatsAppIcon size={23} />
             Send WhatsApp
           </Link>
         </div>

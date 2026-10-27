@@ -8,6 +8,7 @@ import {
 import { ArrowRight, CalendarDays, Check, Plus } from "lucide-react";
 import { stages } from "../../../packages/contracts/src/index";
 import DateField from "./DateField";
+import ProductSelect from "./ProductSelect";
 import { date, query, rupees, time, toMinor, useData, useWrite } from "./api";
 import {
   Avatar,
@@ -277,21 +278,14 @@ export function NewRecord({
               <>
                 <label>
                   Product option *
-                  <select
-                    required
-                    name="definitionId"
+                  <ProductSelect
                     value={definitionId}
-                    onChange={(e) => setDefinitionId(e.target.value)}
-                  >
-                    <option value="">Select product</option>
-                    {catalogue.data?.data
-                      .filter((d: any) => !category || d.category === category)
-                      .map((d: any) => (
-                        <option key={d.id} value={d.id}>
-                          {d.provider.name} · {d.name} ({d.category})
-                        </option>
-                      ))}
-                  </select>
+                    onChange={setDefinitionId}
+                    plans={(catalogue.data?.data || []).filter((d: any) => !category || d.category === category)}
+                    loading={catalogue.isPending}
+                    error={catalogue.error}
+                    onRetry={() => void catalogue.refetch()}
+                  />
                 </label>
                 <label>
                   Policy / Account / Application Identifier *
@@ -595,14 +589,12 @@ export function LeadDetail() {
           >
             <label>
               Product
-              <select required name="definitionId">
-                <option value="">Choose product</option>
-                {catalogue.data?.data.map((p: any) => (
-                  <option key={p.id} value={p.id}>
-                    {p.provider.name} – {p.name}
-                  </option>
-                ))}
-              </select>
+              <ProductSelect
+                plans={catalogue.data?.data || []}
+                loading={catalogue.isPending}
+                error={catalogue.error}
+                onRetry={() => void catalogue.refetch()}
+              />
             </label>
             <label>
               Application Identifier

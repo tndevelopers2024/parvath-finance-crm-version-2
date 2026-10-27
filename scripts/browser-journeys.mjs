@@ -327,9 +327,9 @@ try {
   });
   await accept.waitFor();
   // Submitting without the acceptance box ticked must not convert.
-  await accept
-    .locator("select[name=definitionId]")
-    .selectOption({ label: `${providerName} – ${planName}` });
+  await accept.getByRole("combobox", { name: "Product option", exact: true }).click();
+  await page.getByRole("combobox", { name: "Search products", exact: true }).fill(planName);
+  await page.getByRole("option").filter({ hasText: planName }).click();
   await accept.locator('input[name="identifier"]').fill("JOURNEY-" + suffix);
   await accept.getByRole("button", { name: "Confirm acceptance" }).click();
   assert.equal(

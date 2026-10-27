@@ -29,7 +29,7 @@ export default function SmoothScroll() {
             prevent: (node) =>
               Boolean(
                 node.closest(
-                  '[role="dialog"], .sidebar, .search-results, textarea, select',
+                  '[role="dialog"], .sidebar, .search-results, .client-combobox-dropdown, .product-select-popup, .date-popover, textarea, select',
                 ),
               ),
           });

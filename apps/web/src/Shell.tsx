@@ -1,3 +1,4 @@
+import WhatsAppIcon from "./WhatsAppIcon";
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   Link,
@@ -8,13 +9,11 @@ import {
 } from "react-router-dom";
 import {
   Bell,
-  ChartNoAxesColumnIncreasing,
   CheckSquare,
   ChevronDown,
   House,
   LogOut,
   Menu,
-  MessageCircle,
   Package,
   Plus,
   Search,
@@ -41,10 +40,9 @@ const nav = [
   ["Follow-ups", "/followups", CheckSquare],
   ["Clients", "/clients", Users],
   ["Leads", "/leads", Target],
-  ["Products", "/products", Package],
   ["Providers", "/providers", House],
-  ["WhatsApp", "/engagement", MessageCircle],
-  ["Reports", "/reports", ChartNoAxesColumnIncreasing],
+  ["Products", "/products", Package],
+  ["WhatsApp", "/engagement", WhatsAppIcon],
   ["Settings", "/settings", Settings],
 ] as const;
 export default function Shell() {

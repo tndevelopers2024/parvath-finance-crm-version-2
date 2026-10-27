@@ -726,7 +726,8 @@ section("product-clients", async () => {
   await page.getByText(holder.name, { exact: false }).first().click();
   const uniq = String(Date.now()).slice(-8);
   await page.locator('input[name="identifier"]').fill("SWEEP-NEW-" + uniq);
-  await page.locator('select[name="definitionId"]').selectOption({ index: 1 });
+  await page.getByRole("combobox", { name: "Product option", exact: true }).click();
+  await page.getByRole("listbox", { name: "Product plans", exact: true }).getByRole("option").first().click();
   await page
     .locator("label", { hasText: "Start Date" })
     .locator('input[type="text"]')

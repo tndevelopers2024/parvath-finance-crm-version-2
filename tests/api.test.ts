@@ -544,6 +544,62 @@ describe("Authenticated MongoDB workflows", () => {
     expect(seen).toEqual([{ key, rowsLeft: 0 }]);
     expect(await db.client.count({ where: { id } })).toBe(0);
   });
+  it("manages providers and plans with duplicate and deletion protections", async () => {
+    const provider = await write("/providers", {
+      name: "Catalogue CRUD Provider",
+    });
+    expect(provider.status).toBe(201);
+    const providerId = provider.body.data.id;
+    expect(
+      (
+        await write(
+          `/providers/${providerId}`,
+          { name: "Updated CRUD Provider" },
+          "patch",
+        )
+      ).status,
+    ).toBe(200);
+    const body = {
+      name: "CRUD Health Plan",
+      providerId,
+      category: "Health Insurance",
+    };
+    const plan = await write("/catalogue", body);
+    expect(plan.status).toBe(201);
+    expect((await write("/catalogue", body)).status).toBe(409);
+    expect((await write(`/providers/${providerId}`, {}, "delete")).status).toBe(
+      409,
+    );
+    const planId = plan.body.data.id;
+    expect(
+      (
+        await write(
+          `/catalogue/${planId}`,
+          { ...body, name: "Updated CRUD Plan" },
+          "patch",
+        )
+      ).status,
+    ).toBe(200);
+    const listed = await admin.get("/api/catalogue");
+    expect(listed.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: planId,
+          name: "Updated CRUD Plan",
+          provider: expect.objectContaining({
+            id: providerId,
+            name: "Updated CRUD Provider",
+          }),
+        }),
+      ]),
+    );
+    expect((await write(`/catalogue/${planId}`, {}, "delete")).status).toBe(
+      200,
+    );
+    expect((await write(`/providers/${providerId}`, {}, "delete")).status).toBe(
+      200,
+    );
+  });
   it("creates a catalogue item and a lead with stage history", async () => {
     const addedProvider = await write("/providers", { name: "Test Insurer" });
     expect(addedProvider.status).toBe(201);

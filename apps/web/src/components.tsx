@@ -1,7 +1,10 @@
+import WhatsAppIcon from "./WhatsAppIcon";
 import {
   createContext,
   useContext,
   useEffect,
+  useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -509,13 +512,7 @@ export function ContactActions({
           void open("WhatsApp");
         }}
       >
-        <img
-          src="/assets/whatsapp.svg"
-          width={18}
-          height={18}
-          alt=""
-          aria-hidden="true"
-        />
+        <WhatsAppIcon size={18} color="#25D366" />
       </button>
       <button
         aria-label={`Call ${client.name}`}
@@ -633,7 +630,7 @@ export function Calendar({
 const quickItems: [string, LucideIcon, string, string][] = [
   ["Add Client", UserPlus, "/clients/new", "mint"],
   ["Add Lead", Target, "/leads/new", "lavender"],
-  ["Send WhatsApp", MessageCircle, "/engagement/new", "mint"],
+  ["Send WhatsApp", WhatsAppIcon, "/engagement/new", "mint"],
   ["Create Reminder", CalendarPlus, "/followups/new", "rose"],
   ["Upload Document", Upload, "/clients?upload=1", "blue"],
   ["View Renewals", CalendarDays, "/renewals", "amber"],
@@ -651,7 +648,7 @@ export function QuickActions({
     ? ([
         [
           "WhatsApp",
-          MessageCircle,
+          WhatsAppIcon,
           `/engagement/new?clientId=${profile}`,
           "mint",
         ],
@@ -908,6 +905,10 @@ export function ClientCombobox({
   autoFocus?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [selectionError, setSelectionError] = useState(false);
+  const listId = useId();
+  const errorId = useId();
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -920,6 +921,62 @@ export function ClientCombobox({
     }, 200);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(
+      required && !value ? "Select a client from the list." : "",
+    );
+  }, [required, value, open, searchTerm]);
+
+  useLayoutEffect(() => {
+    if (!open || disabled) return;
+    const menu = dropdownRef.current;
+    if (!menu) return;
+    menu.showPopover?.();
+    const place = () => {
+      const anchor = containerRef.current?.querySelector(".client-combobox-input-wrap");
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const viewport = window.visualViewport;
+      const left = viewport?.offsetLeft || 0;
+      const top = viewport?.offsetTop || 0;
+      const width = viewport?.width || document.documentElement.clientWidth;
+      const height = viewport?.height || window.innerHeight;
+      if (rect.bottom < top || rect.top > top + height) {
+        setOpen(false);
+        return;
+      }
+      const below = top + height - rect.bottom - 12;
+      const above = rect.top - top - 12;
+      const upward = below < 220 && above > below;
+      const room = Math.max(0, upward ? above : below);
+      menu.style.width = Math.min(rect.width, width - 16) + "px";
+      menu.style.maxHeight = Math.min(340, room) + "px";
+      menu.style.left = Math.max(left + 8, Math.min(rect.left, left + width - menu.offsetWidth - 8)) + "px";
+      menu.style.top = (upward ? rect.top - menu.offsetHeight - 6 : rect.bottom + 6) + "px";
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(menu);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    window.visualViewport?.addEventListener("scroll", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+      window.visualViewport?.removeEventListener("scroll", place);
+    };
+  }, [open, disabled]);
+
+  useEffect(() => {
+    if (open && highlightedIndex >= 0) {
+      dropdownRef.current?.querySelectorAll('[role="option"]')[highlightedIndex]
+        ?.scrollIntoView({ block: "nearest" });
+    }
+  }, [open, highlightedIndex]);
 
   const pageSize = 100;
   const clientsQuery = useInfiniteQuery<any, Error>({
@@ -992,6 +1049,7 @@ export function ClientCombobox({
   }, []);
 
   const handleSelect = (client: ClientItem) => {
+    setSelectionError(false);
     onChange(client.id, client);
     setOpen(false);
     setSearchTerm("");
@@ -1019,28 +1077,11 @@ export function ClientCombobox({
     <div
       ref={containerRef}
       className={`client-combobox ${className} ${open ? "is-open" : ""}`}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
     >
-      <input
-        type="text"
-        name={name}
-        value={value || ""}
-        required={required}
-        tabIndex={-1}
-        aria-hidden="true"
-        style={{
-          position: "absolute",
-          opacity: 0,
-          width: "1px",
-          height: "1px",
-          margin: "-1px",
-          padding: 0,
-          border: 0,
-          pointerEvents: "none",
-          clip: "rect(0 0 0 0)",
-          overflow: "hidden",
-        }}
-        readOnly
-      />
+      <input type="hidden" name={name} value={value || ""} disabled={disabled} />
 
       {value && selectedClient && !open ? (
         <div
@@ -1122,7 +1163,17 @@ export function ClientCombobox({
             role="combobox"
             aria-expanded={open}
             aria-autocomplete="list"
-            aria-controls="client-combobox-list"
+            aria-controls={open ? listId : undefined}
+            aria-activedescendant={open && highlightedIndex >= 0 ? `${listId}-${highlightedIndex}` : undefined}
+            aria-invalid={selectionError || undefined}
+            aria-describedby={selectionError ? errorId : undefined}
+            required={required && !value}
+            onInvalid={(e) => {
+              e.preventDefault();
+              setSelectionError(true);
+              setOpen(false);
+              inputRef.current?.focus();
+            }}
             autoComplete="off"
             className="client-combobox-input"
             placeholder={
@@ -1159,6 +1210,7 @@ export function ClientCombobox({
                   );
                 }
               } else if (e.key === "Enter") {
+                if (open) e.preventDefault();
                 if (
                   open &&
                   highlightedIndex >= 0 &&
@@ -1222,17 +1274,33 @@ export function ClientCombobox({
         </div>
       )}
 
+      {selectionError && (
+        <small className="field-error" id={errorId}>Select a client from the list.</small>
+      )}
       {open && !disabled && (
         <div
-          id="client-combobox-list"
-          role="listbox"
+          ref={dropdownRef}
+          popover="manual"
           className="client-combobox-dropdown"
+          onClick={(e) => {
+            // Non-interactive option rows live inside field labels. Prevent the
+            // label's default activation from reopening the picker after selection.
+            if (!(e.target as HTMLElement).closest("a")) e.preventDefault();
+          }}
         >
           {clientsQuery.isPending ? (
-            <Loading />
+            <div className="client-combobox-empty" role="status"><Loading layout="inline" /> Loading clients…</div>
+          ) : clientsQuery.error ? (
+            <div className="client-combobox-empty" role="alert">
+              <p>Unable to load clients. Please try again.</p>
+              <button type="button" className="button small" onClick={() => void clientsQuery.refetch()}>Retry</button>
+            </div>
           ) : filteredClients.length > 0 ? (
             <div
               className="client-combobox-options"
+              id={listId}
+              role="listbox"
+              aria-label="Clients"
               onScroll={(e) => {
                 const el = e.currentTarget;
                 if (
@@ -1250,9 +1318,11 @@ export function ClientCombobox({
                   <div
                     key={c.id}
                     role="option"
+                    id={`${listId}-${idx}`}
                     aria-selected={isSelected}
                     className={`client-combobox-option ${isSelected ? "selected" : ""} ${isHighlighted ? "highlighted" : ""}`}
                     onMouseEnter={() => setHighlightedIndex(idx)}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleSelect(c)}
                   >
                     <Avatar name={c.name} size="small" />

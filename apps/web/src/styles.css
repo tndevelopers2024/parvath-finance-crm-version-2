@@ -4846,6 +4846,7 @@ select.role-select {
 
 .client-combobox-input {
   flex: 1;
+  width: 0 !important;
   border: 0 !important;
   outline: none !important;
   background: transparent !important;
@@ -5004,10 +5005,11 @@ select.role-select {
 
 /* Dropdown Menu */
 .client-combobox-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
   z-index: 100;
   background: #ffffff;
   border: 1px solid var(--color-border);
@@ -5016,8 +5018,15 @@ select.role-select {
   overflow: hidden;
 }
 
+.client-combobox-dropdown:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
 .client-combobox-options {
-  max-height: 280px;
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px;
@@ -5053,11 +5062,14 @@ select.role-select {
 
 .client-combobox-option-title {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
   gap: 8px;
 }
 
 .client-combobox-option-title .client-name {
+  overflow-wrap: anywhere;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-heading);
@@ -5076,10 +5088,10 @@ select.role-select {
 
 .client-combobox-option-meta {
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 5px;
   font-size: 11px;
@@ -5130,6 +5142,7 @@ select.role-select {
 
 /* Dropdown Footer */
 .client-combobox-footer {
+  flex-shrink: 0;
   padding: 8px 12px;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface-soft);

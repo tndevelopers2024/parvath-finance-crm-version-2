@@ -302,3 +302,89 @@ html.dark .form-error {
 .app-shell.workspace-redesign .clients-table td {
   padding-inline: 10px;
 }
+
+/* Shared client picker: compact controls and readable records at every form width. */
+.client-combobox .client-combobox-toggle,
+.client-combobox .client-combobox-clear-query,
+.client-combobox .client-combobox-clear-btn {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 6px;
+  border-radius: 6px;
+  flex: 0 0 32px;
+}
+.client-combobox-name-row { flex-wrap: wrap; }
+.client-combobox-meta { flex-wrap: wrap; white-space: normal; overflow-wrap: anywhere; }
+.client-combobox-selected-info { min-width: 0; }
+.client-combobox-name { white-space: normal; overflow-wrap: anywhere; }
+.client-combobox-selected { flex-wrap: wrap; }
+.client-combobox-option > .avatar { flex-shrink: 0; }
+.client-combobox-dropdown .client-combobox-empty { overflow-y: auto; min-height: 0; }
+.client-combobox-dropdown .badge { flex-shrink: 0; }
+.form-grid > label { min-width: 0; }
+.form-grid select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+
+.client-combobox-option-meta .separator,
+.client-combobox-meta .separator { display: none; }
+.client-combobox-option-meta,
+.client-combobox-meta { column-gap: 10px; row-gap: 2px; }
+
+/* Product plan picker, shared by policy entry and accepted-sale conversion. */
+.product-select { position: relative; min-width: 0; width: 100%; }
+.product-select .product-select-native {
+  position: absolute; width: 1px !important; height: 1px !important;
+  min-height: 0 !important; padding: 0 !important; margin: 0;
+  opacity: 0; pointer-events: none; clip-path: inset(50%);
+}
+.product-select .product-select-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-width: 0; min-height: 42px; padding: 10px 14px;
+  border: 1px solid var(--color-border); border-radius: 10px;
+  background: var(--ws-surface, var(--color-surface, #fff));
+  color: var(--color-ink); text-align: left; font: inherit; cursor: pointer;
+}
+.product-select-trigger > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.product-select-trigger strong,
+.product-select-option strong { display: block; font-size: 13px; font-weight: 500; }
+.product-select-trigger small,
+.product-select-option small { display: block; margin-top: 3px; color: var(--color-subtle); font-size: 11px; font-weight: 400; }
+.product-select-trigger > svg,
+.product-select-option > svg { flex-shrink: 0; }
+.product-select-placeholder { color: var(--color-subtle); }
+.product-select-trigger:focus-visible {
+  outline: 2px solid var(--color-focus); outline-offset: 2px;
+}
+.product-select-trigger[aria-invalid="true"] { border-color: var(--color-danger); }
+.product-select-popup {
+  position: fixed; inset: auto; margin: 0; padding: 0; box-sizing: border-box;
+  overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--ws-surface, var(--color-surface, #fff)); color: var(--color-ink);
+  box-shadow: 0 16px 40px #10261b33; font-size: 13px; font-weight: 400;
+}
+.product-select-popup:popover-open { display: flex; flex-direction: column; }
+.product-select-search {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border); flex-shrink: 0;
+}
+.product-select-search > svg { color: var(--color-subtle); flex-shrink: 0; }
+.product-select-search input {
+  flex: 1; width: 0 !important; min-width: 0; min-height: 32px !important;
+  padding: 4px !important; border: 0 !important; outline: none !important;
+  box-shadow: none !important; background: transparent !important; color: inherit !important;
+}
+.product-select-search:focus-within { box-shadow: inset 0 -2px var(--color-focus); }
+.product-select-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px; }
+.product-select-options > p,
+.product-select-options > [role="alert"] { padding: 12px; margin: 0; overflow-wrap: anywhere; }
+.product-select-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+}
+.product-select-option > span { min-width: 0; overflow-wrap: anywhere; }
+.product-select-option:hover,
+.product-select-option.highlighted,
+.product-select-option[aria-selected="true"] { background: var(--color-brand-soft); }
+/* A selector is a form field; the app-wide pill-button rule must not change its shape. */
+.product-select .product-select-trigger { border-radius: 10px !important; }
