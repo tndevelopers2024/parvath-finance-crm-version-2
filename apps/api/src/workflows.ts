@@ -8,6 +8,7 @@ import {
   followupSchema,
   productSchema,
   eventSchema,
+  eventTypesForCategory,
   eventUpdateSchema,
   eventCancelSchema,
   paymentReversalSchema,
@@ -1085,11 +1086,7 @@ workflows.post("/renewals", permit("edit"), async (req, res) => {
   const definition = await db.productDefinition.findUniqueOrThrow({
     where: { id: p.definitionId },
   });
-  const allowed = definition.category.includes("Insurance")
-    ? ["Insurance renewal", "Premium payment"]
-    : definition.category.includes("Loan")
-      ? ["Loan instalment", "Loan review"]
-      : ["Bond interest", "Maturity"];
+  const allowed = eventTypesForCategory(definition.category);
   if (!allowed.includes(v.type))
     throw new HttpError(
       422,

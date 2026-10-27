@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   clientSchema,
+  eventTypesForCategory,
   onboardingProfileSchema,
   withoutUnchanged,
 } from "../packages/contracts/src/index.js";
@@ -269,5 +270,34 @@ describe("Client onboarding validation", () => {
       companyName: "Example Co",
     });
     expect(withoutUnchanged(next, undefined)).toBe(next);
+  });
+});
+
+describe("Financial event categories", () => {
+  it.each([
+    "Life Insurance",
+    "Health Insurance",
+    "Motor Insurance",
+    "Term Insurance",
+  ])("offers insurance events for %s", (category) => {
+    expect(eventTypesForCategory(category)).toEqual([
+      "Insurance renewal",
+      "Premium payment",
+    ]);
+  });
+  it.each(["Home Loan", "Business Loan"])(
+    "offers loan events for %s",
+    (category) => {
+      expect(eventTypesForCategory(category)).toEqual([
+        "Loan instalment",
+        "Loan review",
+      ]);
+    },
+  );
+  it("offers investment events for investments", () => {
+    expect(eventTypesForCategory("Investment")).toEqual([
+      "Bond interest",
+      "Maturity",
+    ]);
   });
 });

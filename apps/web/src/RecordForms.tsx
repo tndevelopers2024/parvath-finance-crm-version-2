@@ -7,10 +7,12 @@ import {
 } from "react-router-dom";
 import { ArrowRight, CalendarDays, Check, Plus } from "lucide-react";
 import {
+  eventTypesForCategory,
   visibleLeadStages,
   leadStageLabel,
 } from "../../../packages/contracts/src/index";
 import DateField from "./DateField";
+import ReadOnlyField from "./ReadOnlyField";
 import ProductSelect from "./ProductSelect";
 import { date, query, rupees, time, toMinor, useData, useWrite } from "./api";
 import {
@@ -1365,9 +1367,14 @@ export function ProductDetail() {
     write = useWrite(),
     toast = useToast();
   const [mode, setMode] = useState("");
+  const [eventType, setEventType] = useState("");
   if (q.isPending) return <Loading layout="detail" />;
   if (q.error) return <ErrorState error={q.error} />;
   const p = q.data.data;
+  const allowedEventTypes = eventTypesForCategory(p.definition.category);
+  const selectedEventType =
+    allowedEventTypes.find((type) => type === eventType) ??
+    allowedEventTypes[0];
   return (
     <>
       <Back
@@ -1424,7 +1431,14 @@ export function ProductDetail() {
         title="Scheduled Events"
         action={
           p.status !== "Closed" && (
-            <button className="primary" onClick={() => setMode("event")}>
+            <button
+              className="primary"
+              onClick={() => {
+                write.reset();
+                setEventType("");
+                setMode("event");
+              }}
+            >
               <Plus size={16} />
               Add Event
             </button>
@@ -1464,7 +1478,8 @@ export function ProductDetail() {
                           productId: id,
                           type: f.type,
                           dueDate: f.dueDate,
-                          amountMinor: toMinor(f.amount),
+                          amountMinor:
+                            f.type === "Loan review" ? "0" : toMinor(f.amount),
                           recurrenceMonths: f.recurrenceMonths
                             ? Number(f.recurrenceMonths)
                             : undefined,
@@ -1501,15 +1516,16 @@ export function ProductDetail() {
               <>
                 <label>
                   Event Type
-                  <select name="type">
-                    {[
-                      "Insurance renewal",
-                      "Premium payment",
-                      "Loan instalment",
-                      "Loan review",
-                      "Bond interest",
-                      "Maturity",
-                    ].map((t) => (
+                  <select
+                    name="type"
+                    value={selectedEventType}
+                    disabled={write.isPending}
+                    onChange={(e) => {
+                      setEventType(e.target.value);
+                      write.reset();
+                    }}
+                  >
+                    {allowedEventTypes.map((t) => (
                       <option key={t}>{t}</option>
                     ))}
                   </select>
@@ -1518,16 +1534,25 @@ export function ProductDetail() {
                   Due Date
                   <DateField name="dueDate" required />
                 </label>
-                <label>
-                  Amount (₹)
-                  <input
-                    type="number"
-                    name="amount"
-                    step="0.01"
-                    min="0"
-                    required
+                {selectedEventType === "Loan review" ? (
+                  <ReadOnlyField
+                    label="Amount (₹)"
+                    value="₹0"
+                    badge="No payment"
+                    reason="A loan review does not require a payment."
                   />
-                </label>
+                ) : (
+                  <label>
+                    Amount (₹)
+                    <input
+                      type="number"
+                      name="amount"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </label>
+                )}
                 <label>
                   Repeat every (months; blank for one-time)
                   <input

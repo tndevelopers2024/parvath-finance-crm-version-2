@@ -78,6 +78,15 @@ export const eventTypes = [
   "Bond interest",
   "Maturity",
 ] as const;
+export function eventTypesForCategory(
+  category: string,
+): readonly (typeof eventTypes)[number][] {
+  return category.includes("Insurance")
+    ? ["Insurance renewal", "Premium payment"]
+    : category.includes("Loan")
+      ? ["Loan instalment", "Loan review"]
+      : ["Bond interest", "Maturity"];
+}
 const optionalText = z
   .string()
   .trim()
