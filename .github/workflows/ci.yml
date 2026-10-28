@@ -2,7 +2,7 @@ name: Verify CRM
 on: [push, pull_request]
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       NODE_ENV: test
       APP_ORIGIN: http://localhost:5177
@@ -23,6 +23,11 @@ jobs:
             docker exec crm-mongo mongosh --quiet --eval 'db.adminCommand({ping:1})' && break
             sleep 1
           done
+          if ! docker ps -q -f name=crm-mongo | grep -q .; then
+            echo "::error::crm-mongo container exited unexpectedly. Logs:"
+            docker logs crm-mongo
+            exit 1
+          fi
           docker exec crm-mongo mongosh --quiet --eval 'rs.initiate({_id:"ci",members:[{_id:0,host:"localhost:27017"}]})'
           for i in $(seq 1 30); do
             docker exec crm-mongo mongosh --quiet --eval 'if(!db.hello().isWritablePrimary)quit(1)' && break

@@ -950,7 +950,7 @@ export function RenewalDetail() {
   const rupeeInput = (minor: bigint) =>
     `${minor / 100n}.${String(minor % 100n).padStart(2, "0")}`;
   return (
-    <>
+    <div className="renewal-detail">
       <Back to="/renewals">Back to Renewals</Back>
       <PageHeading
         title={e.type}
@@ -996,7 +996,9 @@ export function RenewalDetail() {
               <dt>Frequency</dt>
               <dd>
                 {e.recurrenceMonths
-                  ? "Every " + e.recurrenceMonths + " months"
+                  ? "Every " +
+                    e.recurrenceMonths +
+                    (e.recurrenceMonths === 1 ? " month" : " months")
                   : "One-time event"}
               </dd>
             </div>
@@ -1144,8 +1146,11 @@ export function RenewalDetail() {
                     <Badge>{r.status}</Badge>
                   </td>
                   <td>
+                    {!r.payments.length && (
+                      <span className="muted">No payments recorded</span>
+                    )}
                     {r.payments.map((p: any) => (
-                      <span key={p.id}>
+                      <span className="event-payment-reference" key={p.id}>
                         {p.reference}: {rupees(p.amountMinor)}{" "}
                       </span>
                     ))}
@@ -1358,7 +1363,7 @@ export function RenewalDetail() {
           </form>
         </Modal>
       )}
-    </>
+    </div>
   );
 }
 export function ProductDetail() {
