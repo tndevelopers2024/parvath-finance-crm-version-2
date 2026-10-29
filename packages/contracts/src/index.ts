@@ -366,6 +366,13 @@ export const productSchema = z.object({
   premiumMinor: money.nullable().optional(),
   principalMinor: money.nullable().optional(),
   expectedCommissionMinor: money.default("0"),
+  // First upcoming renewal; frequencyMonths null means a one-time (single premium) product.
+  renewal: z
+    .object({
+      frequencyMonths: z.number().int().min(1).max(120).nullable(),
+      nextDueDate: businessDate,
+    })
+    .optional(),
   insuranceDetails: z
     .object({
       sumAssuredMinor: money,

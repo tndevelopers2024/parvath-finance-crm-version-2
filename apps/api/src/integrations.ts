@@ -19,17 +19,15 @@ function missingFor(name: Name): string[] {
       ["WHATSAPP_PHONE_NUMBER_ID", config.WHATSAPP_PHONE_NUMBER_ID],
       ["WHATSAPP_ACCESS_TOKEN", config.WHATSAPP_ACCESS_TOKEN],
     ]);
-  return absent([
-    ["S3_BUCKET", config.S3_BUCKET],
-    // A custom endpoint (MinIO, R2…) cannot sign requests without keys; plain S3 may use the host's own role.
-    ...(config.S3_ENDPOINT
-      ? ([
-          ["S3_ACCESS_KEY", config.S3_ACCESS_KEY],
-          ["S3_SECRET_KEY", config.S3_SECRET_KEY],
-        ] as [string, unknown][])
-      : []),
-    ["CLAMAV_HOST", config.CLAMAV_HOST],
-  ]);
+  // Documents are kept on the server's disk unless a bucket is named; only a bucket on a custom
+  // endpoint (MinIO, R2…) needs keys, since plain S3 may use the host's own role. The virus scanner is optional.
+  if (!config.S3_BUCKET) return [];
+  return config.S3_ENDPOINT
+    ? absent([
+        ["S3_ACCESS_KEY", config.S3_ACCESS_KEY],
+        ["S3_SECRET_KEY", config.S3_SECRET_KEY],
+      ])
+    : [];
 }
 const what: Record<Name, string> = {
   documents: "Document upload and download",

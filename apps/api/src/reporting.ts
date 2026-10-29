@@ -6,7 +6,13 @@ import { db } from "./db.js";
 import { schema } from "./persistence/schema.js";
 import { assertContactAllowed } from "./contact-policy.js";
 import { dateOccasions } from "./important-dates.js";
-import { sendWhatsAppTemplate, whatsappConfigured } from "./whatsapp.js";
+import multer from "multer";
+import { fileTypeFromBuffer } from "file-type";
+import {
+  sendWhatsAppTemplate,
+  uploadWhatsAppMedia,
+  whatsappConfigured,
+} from "./whatsapp.js";
 import { audit, HttpError, owned, permit } from "./security.js";
 import {
   contactHistoryFilter,
@@ -715,6 +721,30 @@ reporting.get("/communications", async (req, res) => {
     })),
   });
 });
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+});
+// Sends the image to WhatsApp and returns its media id, to be attached to a broadcast.
+reporting.post(
+  "/whatsapp/media",
+  permit("operate"),
+  imageUpload.single("file"),
+  async (req, res) => {
+    if (!whatsappConfigured())
+      throw new HttpError(
+        503,
+        "WhatsApp is not connected. An administrator must add the WhatsApp credentials on the server.",
+      );
+    const f = req.file;
+    if (!f) throw new HttpError(400, "Choose a JPG or PNG image (maximum 5 MB)");
+    const detected = await fileTypeFromBuffer(f.buffer);
+    if (!detected || !["image/jpeg", "image/png"].includes(detected.mime))
+      throw new HttpError(400, "The image must be a JPG or PNG file");
+    const media = await uploadWhatsAppMedia(f.buffer, detected.mime, f.originalname);
+    res.json({ data: { id: media.id } });
+  },
+);
 // Sends one approved WhatsApp template to every selected client that has a phone
 // number and a granted WhatsApp consent. Each attempt is recorded in the client's
 // communication history, so the record shows what was actually sent or failed.
@@ -732,6 +762,7 @@ reporting.post("/whatsapp/broadcasts", permit("operate"), async (req, res) => {
         .regex(/^[a-zA-Z]{2,3}(_[A-Za-z0-9]{2,8})?$/)
         .default("en_US"),
       message: z.string().trim().min(1).max(1000),
+      imageId: z.string().regex(/^\d{1,40}$/).optional(),
     })
     .parse(req.body);
   if (!whatsappConfigured())
@@ -792,6 +823,7 @@ reporting.post("/whatsapp/broadcasts", permit("operate"), async (req, res) => {
             template: v.template,
             language: v.language,
             text: v.message,
+            imageId: v.imageId,
           });
           results.push({
             clientId: r.clientId,

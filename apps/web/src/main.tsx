@@ -16,7 +16,7 @@ const Dashboard = lazy(() => import("./Dashboard"));
 import Clients from "./Clients";
 import Products from "./Products";
 import ClientProfile from "./ClientProfile";
-import ClientForm, { NewClientPopup } from "./ClientForm";
+import ClientForm, { NewClientPage } from "./ClientForm";
 import ClientSuccess from "./ClientSuccess";
 import ImportClients from "./ImportClients";
 import Leads from "./Leads";
@@ -47,6 +47,7 @@ import "./reference-layout.css";
 import "./forms.css";
 import "./summary-cards.css";
 import "./green-theme.css";
+import "./typography.css";
 const client = new QueryClient({
   defaultOptions: {
     queries: {
@@ -117,7 +118,7 @@ function App() {
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="clients" element={<Clients />} />
-              <Route path="clients/new" element={<NewClientPopup />} />
+              <Route path="clients/new" element={<NewClientPage />} />
               <Route path="clients/:id/success" element={<ClientSuccess />} />
               <Route path="clients/import" element={<ImportClients />} />
               <Route path="clients/:id" element={<ClientProfile />} />

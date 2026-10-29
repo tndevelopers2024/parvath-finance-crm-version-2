@@ -10,3 +10,6 @@ coverage/
 .DS_Store
 
 .local-mongodb/
+
+# Uploaded documents kept on the server disk
+storage/

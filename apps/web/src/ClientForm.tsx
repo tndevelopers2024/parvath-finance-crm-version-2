@@ -12,7 +12,6 @@ import {
   ChevronRight,
   Mail,
   Phone,
-  Upload,
   UserRound,
 } from "lucide-react";
 import {
@@ -21,16 +20,12 @@ import {
   withoutUnchanged,
   type ClientInput,
 } from "../../../packages/contracts/src/index";
-import { api, query, todayIST, useData, useWrite } from "./api";
-import Clients from "./Clients";
-import { ProductClients } from "./Supporting";
+import { query, todayIST, useData, useWrite } from "./api";
 import {
-  Avatar,
   Back,
   FormError,
   describeField,
   Loading,
-  Modal,
   PageHeading,
   Panel,
   Submit,
@@ -77,7 +72,7 @@ const fieldInfo: Record<string, [string, number?]> = {
   tags: ["Tags"],
   version: ["Record version"],
 };
-export function NewClientPopup() {
+export function NewClientPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const category = params.get("productCategory");
@@ -93,29 +88,7 @@ export function NewClientPopup() {
             })
         : "/clients",
     );
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-  return (
-    <>
-      {returnToProduct ? (
-        <ProductClients category={category || undefined} />
-      ) : (
-        <Clients />
-      )}
-      <Modal
-        title="Add New Client"
-        className="client-onboarding-popup"
-        onClose={close}
-      >
-        <ClientForm embedded onCancel={close} />
-      </Modal>
-    </>
-  );
+  return <ClientForm onCancel={close} />;
 }
 
 export default function ClientForm({
@@ -134,11 +107,9 @@ export default function ClientForm({
     write = useWrite();
   const draftKey = `parvath-draft-${user.organizationId}-${user.userId}`;
   const [step, setStep] = useState(0),
-    [photo, setPhoto] = useState<File>(),
     [duplicate, setDuplicate] = useState(false),
     [duplicateReason, setDuplicateReason] = useState(""),
     [reasonMissing, setReasonMissing] = useState(false),
-    [recovered, setRecovered] = useState(false),
     [profile, setProfile] = useState<OnboardingProfile>({
       sameAddress: true,
       communicationChannels: ["WhatsApp"],
@@ -177,10 +148,6 @@ export default function ClientForm({
       section.style.display = index === sectionIndex ? "" : "none";
     });
   }, [embedded, step, sectionIndex, sectionTitles]);
-  const photoInput = useRef<HTMLInputElement>(null);
-  const storage = user.integrations?.documents;
-  const uploadBlocked = storage?.available === false;
-  const [photoError, setPhotoError] = useState("");
   const form = useForm<ClientInput>({
     // Profile state is validated separately against only the changed values on save.
     resolver: zodResolver(
@@ -231,51 +198,10 @@ export default function ClientForm({
       setSavedProfile(c.onboardingProfile || undefined);
       setProfile(c.onboardingProfile || { sameAddress: true });
     } else if (!id) {
-      try {
-        const d = JSON.parse(localStorage.getItem(draftKey) || "null");
-        const draftValues = d?.form || d;
-        const hasDetails =
-          draftValues &&
-          [
-            "name",
-            "phone",
-            "email",
-            "dob",
-            "gender",
-            "occupation",
-            "address",
-            "city",
-            "state",
-            "registrationNumber",
-            "industry",
-            "notesText",
-          ].some((key) => String(draftValues[key] || "").trim());
-        const hasProfile =
-          d?.profile &&
-          Object.keys(d.profile).some(
-            (key) => !["sameAddress", "communicationChannels"].includes(key),
-          );
-        if (d && (hasDetails || hasProfile)) {
-          reset(draftValues);
-          if (d.profile) setProfile(d.profile);
-          setRecovered(true);
-        }
-      } catch {
-        /* Ignore obsolete draft */
-      }
+      // New clients always start with empty fields; drop any draft saved by earlier versions.
+      localStorage.removeItem(draftKey);
     }
   }, [existing.data, id, reset, draftKey]);
-  useEffect(() => {
-    if (id) return;
-    localStorage.setItem(
-      draftKey,
-      JSON.stringify({ form: form.getValues(), profile }),
-    );
-    const s = watch((v) =>
-      localStorage.setItem(draftKey, JSON.stringify({ form: v, profile })),
-    );
-    return () => s.unsubscribe();
-  }, [watch, draftKey, id, profile]);
   const issuesNotice =
     "Some details need correcting before this can be saved. See the list above the buttons.";
   const profileIssues = () =>
@@ -353,23 +279,9 @@ export default function ClientForm({
         },
       });
       localStorage.removeItem(draftKey);
-      let saveMessage = id
+      const saveMessage = id
         ? "Client details updated"
         : "Client created successfully";
-      if (photo) {
-        const body = new FormData();
-        body.append("file", photo);
-        body.append("purpose", "Photo");
-        try {
-          await api(`/clients/${result.data.id}/documents`, {
-            method: "POST",
-            body,
-          });
-        } catch (e) {
-          saveMessage =
-            "Client saved, but photo upload failed: " + (e as Error).message;
-        }
-      }
       toast(saveMessage);
       navigate(
         id
@@ -548,43 +460,6 @@ export default function ClientForm({
           subtitle="Add client details to start managing their financial journey."
         />
       )}
-      {recovered && (
-        <div className="draft-notice">
-          <span>Saved draft restored.</span>
-          <button
-            className="text-link"
-            onClick={() => {
-              reset({
-                name: "",
-                phone: "",
-                email: "",
-                kind: "Individual",
-                gender: "",
-                source: "Direct",
-                preferredContact: "",
-              });
-              setProfile({
-                sameAddress: true,
-                communicationChannels: ["WhatsApp"],
-              });
-              setValue("preferredContact", "WhatsApp");
-              setPhoto(undefined);
-              setStep(0);
-              setStepNotice("");
-              setDuplicate(false);
-              setDuplicateReason("");
-              setReasonMissing(false);
-              setOtherIssues([]);
-              setShowProfileErrors(false);
-              setCheckFollowup(false);
-              setRecovered(false);
-              localStorage.removeItem(draftKey);
-            }}
-          >
-            Discard draft
-          </button>
-        </div>
-      )}
       <div className="stepper">
         {steps.map((s, i) => (
           <button
@@ -614,7 +489,7 @@ export default function ClientForm({
           {stepNotice}
         </p>
       )}
-      <form ref={formRef} onSubmit={submit} noValidate>
+      <form ref={formRef} onSubmit={submit} noValidate autoComplete="off">
         {embedded && sectionTitles.length > 1 && (
           <label className="popup-section-selector">
             Section {sectionIndex + 1} of {sectionTitles.length}
@@ -780,66 +655,6 @@ export default function ClientForm({
                       ))}
                     </div>
                   </fieldset>
-                  <div className="onboard-photo-inline">
-                    <div className="onboard-avatar">
-                      <Avatar
-                        name={watch("name") || "New Client"}
-                        photoUrl={
-                          photo ? URL.createObjectURL(photo) : undefined
-                        }
-                        animate="always"
-                      />
-                    </div>
-                    <div>
-                      <strong>Profile Photo</strong>
-                      <button
-                        type="button"
-                        disabled={uploadBlocked}
-                        title={uploadBlocked ? storage.message : undefined}
-                        onClick={() => photoInput.current?.click()}
-                      >
-                        <Upload size={16} />{" "}
-                        {photo ? photo.name : "Upload Photo"}
-                      </button>
-                      <small>JPG or PNG, maximum 10 MB</small>
-                      {uploadBlocked && (
-                        <p className="integration-note" role="status">
-                          {storage.message}
-                        </p>
-                      )}
-                      {photoError && (
-                        <small className="field-error" role="alert">
-                          {photoError}
-                        </small>
-                      )}
-                      <input
-                        ref={photoInput}
-                        hidden
-                        type="file"
-                        disabled={uploadBlocked}
-                        accept="image/jpeg,image/png"
-                        onChange={(e) => {
-                          const selected = e.target.files?.[0];
-                          setPhoto(undefined);
-                          setPhotoError("");
-                          if (!selected) return;
-                          if (
-                            !["image/jpeg", "image/png"].includes(
-                              selected.type,
-                            ) ||
-                            selected.size > 10 * 1024 * 1024
-                          ) {
-                            setPhotoError(
-                              "Choose a JPG or PNG photo up to 10 MB.",
-                            );
-                            e.target.value = "";
-                            return;
-                          }
-                          setPhoto(selected);
-                        }}
-                      />
-                    </div>
-                  </div>
                 </div>
               ) : step === 1 ? (
                 <AdditionalDetails

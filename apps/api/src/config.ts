@@ -45,6 +45,8 @@ const schema = z.object({
     .enum(["0", "1"])
     .default("0")
     .transform((v) => v === "1"),
+  // Where uploaded documents are kept on the server's disk when no S3 bucket is configured.
+  STORAGE_DIR: z.string().default("storage/documents"),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default("ap-south-1"),
   S3_BUCKET: z.string().optional(),

@@ -11,6 +11,8 @@ export async function sendWhatsAppTemplate(input: {
   template: string;
   language: string;
   text: string;
+  // A media id from uploadWhatsAppMedia; sent as the template's image header.
+  imageId?: string;
 }): Promise<{ id: string }> {
   const response = await fetch(
     `https://graph.facebook.com/${config.WHATSAPP_API_VERSION}/${config.WHATSAPP_PHONE_NUMBER_ID}/messages`,
@@ -28,6 +30,14 @@ export async function sendWhatsAppTemplate(input: {
           name: input.template,
           language: { code: input.language },
           components: [
+            ...(input.imageId
+              ? [
+                  {
+                    type: "header",
+                    parameters: [{ type: "image", image: { id: input.imageId } }],
+                  },
+                ]
+              : []),
             {
               type: "body",
               parameters: [{ type: "text", text: input.text }],
@@ -45,4 +55,31 @@ export async function sendWhatsAppTemplate(input: {
       payload?.error?.message || `WhatsApp API responded ${response.status}`,
     );
   return { id };
+}
+
+// Uploads one image to WhatsApp once, so every recipient of a broadcast reuses the same media id.
+export async function uploadWhatsAppMedia(
+  buffer: Buffer,
+  mimeType: string,
+  filename: string,
+): Promise<{ id: string }> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType);
+  form.append("file", new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
+  const response = await fetch(
+    `https://graph.facebook.com/${config.WHATSAPP_API_VERSION}/${config.WHATSAPP_PHONE_NUMBER_ID}/media`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.WHATSAPP_ACCESS_TOKEN}` },
+      body: form,
+      signal: AbortSignal.timeout(30000),
+    },
+  );
+  const payload: any = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.id)
+    throw new Error(
+      payload?.error?.message || `WhatsApp media upload responded ${response.status}`,
+    );
+  return { id: String(payload.id) };
 }

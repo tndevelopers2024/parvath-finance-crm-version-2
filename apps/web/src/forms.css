@@ -122,7 +122,7 @@ html.dark .form-error {
   background: var(--ws-surface, #fff);
   color: var(--color-ink);
   box-shadow: 0 16px 40px #10261b33;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   cursor: default;
 }
@@ -139,7 +139,7 @@ html.dark .form-error {
   min-height: 0;
   padding: 4px 8px;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .date-popover button {
   min-height: 0;
@@ -148,7 +148,7 @@ html.dark .form-error {
   border-radius: 8px;
   background: transparent;
   color: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 .date-popover button:hover:not(:disabled) {
   background: var(--color-brand-soft);
@@ -168,7 +168,7 @@ html.dark .form-error {
 .date-popover-grid small {
   padding: 4px 0;
   text-align: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--color-muted);
 }
@@ -249,7 +249,7 @@ html.dark .form-error {
   .onboard-cell-label {
     display: block;
     margin-bottom: 4px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--color-muted);
   }
@@ -270,7 +270,7 @@ html.dark .form-error {
   align-self: stretch;
   min-height: 34px;
   border-style: dashed;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--color-muted);
 }
 
@@ -282,7 +282,7 @@ html.dark .form-error {
   border-radius: 8px;
   background: var(--color-danger-soft);
   color: var(--color-danger);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -347,9 +347,9 @@ html.dark .form-error {
 }
 .product-select-trigger > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .product-select-trigger strong,
-.product-select-option strong { display: block; font-size: 13px; font-weight: 500; }
+.product-select-option strong { display: block; font-size: 14px; font-weight: 500; }
 .product-select-trigger small,
-.product-select-option small { display: block; margin-top: 3px; color: var(--color-subtle); font-size: 11px; font-weight: 400; }
+.product-select-option small { display: block; margin-top: 3px; color: var(--color-subtle); font-size: 12px; font-weight: 400; }
 .product-select-trigger > svg,
 .product-select-option > svg { flex-shrink: 0; }
 .product-select-placeholder { color: var(--color-subtle); }
@@ -361,7 +361,7 @@ html.dark .form-error {
   position: fixed; inset: auto; margin: 0; padding: 0; box-sizing: border-box;
   overflow: hidden; border: 1px solid var(--color-border); border-radius: 12px;
   background: var(--ws-surface, var(--color-surface, #fff)); color: var(--color-ink);
-  box-shadow: 0 16px 40px #10261b33; font-size: 13px; font-weight: 400;
+  box-shadow: 0 16px 40px #10261b33; font-size: 14px; font-weight: 400;
 }
 .product-select-popup:popover-open { display: flex; flex-direction: column; }
 .product-select-search {
@@ -392,11 +392,11 @@ html.dark .form-error {
 
 /* Calculated and account-managed values are summaries, never fake editable inputs. */
 .readonly-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.readonly-field-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--color-subtle); font-size: 12px; font-weight: 600; }
-.readonly-field-badge { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 5px; background: var(--color-brand-soft); color: var(--color-ink); }
-.readonly-field output { display: block; padding: 4px 0; color: var(--color-ink); font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.readonly-field-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--color-subtle); font-size: 13px; font-weight: 600; }
+.readonly-field-badge { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 5px; background: var(--color-brand-soft); color: var(--color-ink); }
+.readonly-field output { display: block; padding: 4px 0; color: var(--color-ink); font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
 .readonly-field > small,
-.onboard-empty-rows { color: var(--color-subtle); font-size: 12px; line-height: 1.5; font-weight: 400; }
+.onboard-empty-rows { color: var(--color-subtle); font-size: 13px; line-height: 1.5; font-weight: 400; }
 .onboard-empty-rows { margin: 0 0 8px; }
 
 /* The last repeating row must scroll fully above the fixed dialog actions. */

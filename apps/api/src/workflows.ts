@@ -13,6 +13,7 @@ import {
   eventCancelSchema,
   paymentReversalSchema,
   businessDate,
+  money,
   stages,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
@@ -657,9 +658,14 @@ workflows.post("/leads/:id/convert", permit("edit"), async (req, res) => {
       accepted: z.literal(true),
       definitionId: z.uuid(),
       identifier: z.string().trim().min(3).max(100).optional(),
+      startDate: businessDate.optional(),
+      status: z.enum(["Application", "Active"]).default("Application"),
+      premiumMinor: money.optional(),
+      expectedCommissionMinor: money.default("0"),
+      renewal: productSchema.shape.renewal,
     })
     .parse(req.body);
-  await owned("productDefinition", v.definitionId, req);
+  const definition = await owned("productDefinition", v.definitionId, req);
   const identifier = v.identifier ?? `APP-${randomUUID()}`;
   const product = await db.transaction(async (tx) => {
     const existing = await tx.clientProduct.findUnique({
@@ -688,10 +694,14 @@ workflows.post("/leads/:id/convert", permit("edit"), async (req, res) => {
         opportunityId: old.id,
         definitionId: v.definitionId,
         identifier,
-        status: "Application",
-        startDate: dateOnly(day()),
+        status: v.status,
+        startDate: dateOnly(v.startDate ?? day()),
+        premiumMinor: v.premiumMinor ? BigInt(v.premiumMinor) : undefined,
+        expectedCommissionMinor: BigInt(v.expectedCommissionMinor),
       },
     });
+    if (v.renewal)
+      await createFirstRenewal(tx, req.auth.organizationId, definition, p, v.renewal);
     await tx.opportunityStageHistory.create({
       data: {
         opportunityId: old.id,
@@ -846,10 +856,43 @@ workflows.get("/products", async (req, res) => {
     meta: { total: await db.clientProduct.count({ where }) },
   });
 });
+// The next renewal becomes a scheduled event, so it shows up on the dashboard and renewals list.
+// Each instalment is the share of the annual premium covered by one renewal period.
+async function createFirstRenewal(
+  tx: typeof db,
+  organizationId: string,
+  definition: { category: string },
+  product: { id: string; clientId: string; premiumMinor?: bigint | null },
+  renewal: { frequencyMonths: number | null; nextDueDate: string },
+) {
+  const type = eventTypesForCategory(definition.category)[0];
+  const annual = product.premiumMinor ?? 0n;
+  const instalment =
+    renewal.frequencyMonths === null
+      ? annual
+      : (annual * BigInt(renewal.frequencyMonths) + 6n) / 12n;
+  await tx.financialEvent.create({
+    data: {
+      type,
+      dueDate: dateOnly(renewal.nextDueDate),
+      amountMinor: instalment,
+      recurrenceMonths: renewal.frequencyMonths ?? undefined,
+      productId: product.id,
+      organizationId,
+      clientId: product.clientId,
+      amountMeaning:
+        type === "Insurance renewal"
+          ? "Premium due"
+          : type === "Loan instalment"
+            ? "Instalment due"
+            : "Interest receivable",
+    },
+  });
+}
 workflows.post("/products", permit("edit"), async (req, res) => {
-  const v = productSchema.parse(req.body);
+  const { renewal, ...v } = productSchema.parse(req.body);
   await owned("client", v.clientId, req);
-  await owned("productDefinition", v.definitionId, req);
+  const definition = await owned("productDefinition", v.definitionId, req);
   const r = await db.transaction(async (tx) => {
     await holdClient(tx, v.clientId, req);
     const p = await tx.clientProduct.create({
@@ -870,6 +913,8 @@ workflows.post("/products", permit("edit"), async (req, res) => {
       p.id,
       "Product application added",
     );
+    if (renewal && v.status !== "Closed")
+      await createFirstRenewal(tx, req.auth.organizationId, definition, p, renewal);
     return p;
   });
   res.status(201).json({ data: r });
@@ -888,7 +933,7 @@ workflows.get("/products/:id", async (req, res) => {
 workflows.patch("/products/:id", permit("edit"), async (req, res) => {
   const old = await owned("clientProduct", String(req.params.id), req);
   const v = productSchema
-    .omit({ clientId: true, definitionId: true })
+    .omit({ clientId: true, definitionId: true, renewal: true })
     .extend({ version: z.number().int() })
     .parse(req.body);
   const { version, ...data } = v;

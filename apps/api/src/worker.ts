@@ -1,10 +1,9 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "./db.js";
 import { config } from "./config.js";
 import { now } from "./domain.js";
-import { s3 } from "./documents.js";
+import { getObjectBuffer } from "./storage.js";
 import pino from "pino";
 import {
   dateOccasions,
@@ -132,11 +131,7 @@ export async function runJob() {
           organizationId: job.organizationId,
         },
       });
-      const object = await s3.send(
-        new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: doc.key }),
-        { abortSignal: AbortSignal.timeout(30000) },
-      );
-      const buffer = Buffer.from(await object.Body!.transformToByteArray());
+      const buffer = await getObjectBuffer(doc.key);
       const clean = await new Promise<boolean>((resolve, reject) => {
         const socket = net.createConnection({
           host: config.CLAMAV_HOST,

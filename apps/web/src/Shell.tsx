@@ -1,5 +1,5 @@
 import WhatsAppIcon from "./WhatsAppIcon";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   NavLink,
@@ -39,13 +39,18 @@ const nav = [
   ["Calendar", "/calendar", CalendarDays],
   ["Renewals", "/renewals", CalendarDays],
   ["Follow-ups", "/followups", CheckSquare],
-  ["Clients", "/clients", Users],
   ["Leads", "/leads", Target],
+  ["Clients", "/clients", Users],
   ["Providers", "/providers", House],
   ["Products", "/products", Package],
   ["WhatsApp", "/engagement", WhatsAppIcon],
   ["Reports", "/reports", ChartNoAxesColumnIncreasing],
   ["Settings", "/settings", Settings],
+] as const;
+const navGroups = [
+  ["DAILY WORK", 0, 4],
+  ["RELATIONSHIPS", 4, 9],
+  ["MANAGEMENT", 9, 11],
 ] as const;
 export default function Shell() {
   const user = useAuth(),
@@ -75,6 +80,25 @@ export default function Shell() {
     [notificationsOpen, setNotificationsOpen] = useState(false),
     [sidebarExpanded, setSidebarExpanded] = useState(false),
     [pinned, setPinned] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("nav-collapsed") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const toggleGroup = (title: string) =>
+    setCollapsedGroups((groups) => {
+      const next = groups.includes(title)
+        ? groups.filter((g) => g !== title)
+        : [...groups, title];
+      try {
+        localStorage.setItem("nav-collapsed", JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
   const input = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -230,22 +254,40 @@ export default function Shell() {
         >
           <X />
         </button>
-        <div className="nav-section-label">DAILY WORK</div>
         <nav aria-label="Main navigation">
-          {nav.map(([label, to, C], index) => (
-            <Fragment key={to}>
-              {index === 4 && (
-                <div className="nav-section-label">RELATIONSHIPS</div>
-              )}
-              {index === 9 && (
-                <div className="nav-section-label">MANAGEMENT</div>
-              )}
-              <NavLink key={to} to={to} title={label} aria-label={label}>
-                <C size={19} />
-                <span className="nav-label">{label}</span>
-              </NavLink>
-            </Fragment>
-          ))}
+          {navGroups.map(([title, from, to]) => {
+            const open = !collapsedGroups.includes(title);
+            return (
+              <div className="nav-group" key={title}>
+                <button
+                  type="button"
+                  className="nav-section-label nav-group-toggle"
+                  aria-expanded={open}
+                  onClick={() => toggleGroup(title)}
+                >
+                  {title}
+                  <ChevronDown
+                    size={14}
+                    className={open ? "" : "collapsed"}
+                    aria-hidden="true"
+                  />
+                </button>
+                <div className={`nav-group-items ${open ? "" : "is-collapsed"}`}>
+                  {nav.slice(from, to).map(([label, path, C]) => (
+                    <NavLink
+                      key={path}
+                      to={path}
+                      title={label}
+                      aria-label={label}
+                    >
+                      <C size={19} />
+                      <span className="nav-label">{label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </nav>
         <Link className="sidebar-account" to="/settings">
           <Avatar name={user.name} followCursor={false} />

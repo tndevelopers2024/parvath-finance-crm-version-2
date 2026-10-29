@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   useDraggable,
@@ -9,9 +10,18 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
-import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
 import {
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  LayoutGrid,
+  Plus,
+  Table2,
+} from "lucide-react";
+import {
+  leadStageLabel,
   stages,
   visibleLeadStages,
 } from "../../../packages/contracts/src/index";
@@ -19,8 +29,13 @@ import { date, query, useData, useInfiniteData, useWrite } from "./api";
 import {
   Avatar,
   Badge,
+  Empty,
+  ErrorState,
+  Loading,
   Metrics,
+  Pagination,
   ProductIcon,
+  pageSizeFrom,
   useAuth,
   useToast,
 } from "./components";
@@ -36,6 +51,22 @@ export default function Leads() {
       priority: params.get("priority"),
     },
     stats = useData("/dashboard");
+  const [view, setViewState] = useState<"board" | "table">(() => {
+    try {
+      return localStorage.getItem("leads-view") === "table" ? "table" : "board";
+    } catch {
+      return "board";
+    }
+  });
+  const setView = (next: "board" | "table") => {
+    setViewState(next);
+    try {
+      localStorage.setItem("leads-view", next);
+    } catch {
+      /* ignore */
+    }
+  };
+  const [dragging, setDragging] = useState<any>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),
@@ -76,6 +107,7 @@ export default function Leads() {
   const scrollBoard = (direction: number) =>
     boardRef.current?.scrollBy({ left: direction * 316, behavior: "smooth" });
   const move = async (e: DragEndEvent) => {
+    setDragging(null);
     if (!e.over) return;
     const lead = e.active.data.current?.lead,
       stage = String(e.over.id);
@@ -135,13 +167,42 @@ export default function Leads() {
           },
         ]}
       />
-      {user.role !== "Operations" && (
-        <Link className="lead-add-bar" to="/leads/new">
-          <Plus size={18} /> Add Lead
-        </Link>
-      )}
-      {
-        <DndContext sensors={sensors} onDragEnd={move}>
+      <div className="lead-toolbar">
+        <div className="lead-view-toggle" role="group" aria-label="Lead view">
+          <button
+            type="button"
+            className={view === "board" ? "active" : ""}
+            aria-pressed={view === "board"}
+            onClick={() => setView("board")}
+          >
+            <LayoutGrid size={16} /> Board
+          </button>
+          <button
+            type="button"
+            className={view === "table" ? "active" : ""}
+            aria-pressed={view === "table"}
+            onClick={() => setView("table")}
+          >
+            <Table2 size={16} /> Table
+          </button>
+        </div>
+        {user.role !== "Operations" && (
+          <Link className="lead-add-bar" to="/leads/new">
+            <Plus size={18} /> Add Lead
+          </Link>
+        )}
+      </div>
+      {view === "table" ? (
+        <LeadTable filters={filters} />
+      ) : (
+        <DndContext
+          sensors={sensors}
+          onDragStart={(e: DragStartEvent) =>
+            setDragging(e.active.data.current?.lead || null)
+          }
+          onDragEnd={move}
+          onDragCancel={() => setDragging(null)}
+        >
           <div className="lead-board-nav">
             <span>
               Swipe, use shift + scroll, or the arrows to see every stage
@@ -173,8 +234,12 @@ export default function Leads() {
               />
             ))}
           </div>
+          {/* The dragged card is drawn here, above every column, so it never slides behind the others. */}
+          <DragOverlay dropAnimation={null}>
+            {dragging ? <LeadCardView lead={dragging} overlay /> : null}
+          </DragOverlay>
         </DndContext>
-      }
+      )}
     </>
   );
 }
@@ -281,20 +346,45 @@ function LeadColumn({
   );
 }
 function LeadCard({ lead: l }: { lead: any }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id: l.id, data: { lead: l } });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: l.id,
+    data: { lead: l },
+  });
+  // Pointer drags start from anywhere on the card; the handle keeps the keyboard drag.
+  const { onPointerDown, ...keyboard } = (listeners || {}) as Record<
+    string,
+    any
+  >;
+  return (
+    <LeadCardView
+      lead={l}
+      innerRef={setNodeRef}
+      dragging={isDragging}
+      onPointerDown={onPointerDown}
+      handleProps={{ ...keyboard, ...attributes }}
+    />
+  );
+}
+function LeadCardView({
+  lead: l,
+  innerRef,
+  dragging,
+  overlay,
+  onPointerDown,
+  handleProps,
+}: {
+  lead: any;
+  innerRef?: (node: HTMLElement | null) => void;
+  dragging?: boolean;
+  overlay?: boolean;
+  onPointerDown?: (e: React.PointerEvent) => void;
+  handleProps?: Record<string, any>;
+}) {
   return (
     <article
-      ref={setNodeRef}
-      className={`lead-card ${isDragging ? "dragging" : ""}`}
-      style={
-        transform
-          ? {
-              transform: `translate3d(${transform.x}px,${transform.y}px,0)`,
-              zIndex: 10,
-            }
-          : undefined
-      }
+      ref={innerRef}
+      onPointerDown={onPointerDown}
+      className={`lead-card ${dragging ? "dragging" : ""} ${overlay ? "lead-card-overlay" : ""}`}
     >
       <div className="lead-card-body">
         <div className="lead-card-profile min-w-0">
@@ -330,13 +420,112 @@ function LeadCard({ lead: l }: { lead: any }) {
         </Link>
       </div>
       <button
+        type="button"
         className="drag-handle"
-        {...listeners}
-        {...attributes}
+        {...handleProps}
         aria-label={`Move ${l.client.name}; use lead details for stage selection`}
       >
         <GripVertical size={14} />
       </button>
     </article>
+  );
+}
+
+// Every lead in one paged table, with the same search and priority filters as the board.
+function LeadTable({ filters }: { filters: Record<string, string | null> }) {
+  const [params, setParams] = useSearchParams();
+  const page = Math.max(1, Number(params.get("page")) || 1),
+    limit = pageSizeFrom(params.get("limit"), 25);
+  const leads = useData(
+    "/leads?" + query({ ...filters, page, limit }),
+  );
+  const go = (key: string, value: string) =>
+    setParams((prev) => {
+      if (value) prev.set(key, value);
+      else prev.delete(key);
+      if (key !== "page") prev.delete("page");
+      return prev;
+    });
+  if (leads.isPending) return <Loading />;
+  if (leads.error) return <ErrorState error={leads.error} retry={leads.refetch} />;
+  const rows: any[] = leads.data.data;
+  return (
+    <div className="lead-table-wrap">
+      <div className="table-scroll">
+        <table className="lead-table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Requirement</th>
+              <th>Stage</th>
+              <th>Priority</th>
+              <th>Source</th>
+              <th>Next follow-up</th>
+              <th>Added</th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((l) => {
+              const closed = ["Won", "Lost"].includes(l.stage);
+              return (
+                <tr key={l.id}>
+                  <td>
+                    <Link className="person-cell" to={"/leads/" + l.id}>
+                      <Avatar name={l.client.name} />
+                      <span>
+                        <strong>{l.client.name}</strong>
+                        <small>{l.client.phone}</small>
+                      </span>
+                    </Link>
+                  </td>
+                  <td>
+                    <span className="lead-table-requirement">
+                      <ProductIcon category={l.requirement} size={14} />
+                      {l.requirement}
+                    </span>
+                  </td>
+                  <td>
+                    <Badge
+                      tone={
+                        l.stage === "Won"
+                          ? "mint"
+                          : l.stage === "Lost"
+                            ? "rose"
+                            : "blue"
+                      }
+                    >
+                      {leadStageLabel(l.stage)}
+                    </Badge>
+                  </td>
+                  <td>{l.priority}</td>
+                  <td>{l.source || "—"}</td>
+                  <td>{l.nextFollowUp ? date(l.nextFollowUp) : "—"}</td>
+                  <td>{date(l.createdAt)}</td>
+                  <td>
+                    <Link
+                      className="button small"
+                      to={`/leads/${l.id}${closed ? "" : "?edit=1"}`}
+                    >
+                      {closed ? "View" : "Edit"}
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {!rows.length && <Empty text="No leads match these filters" />}
+      </div>
+      <Pagination
+        total={leads.data.meta.total}
+        page={page}
+        limit={limit}
+        onChange={(n) => go("page", n > 1 ? String(n) : "")}
+        onLimitChange={(n) => go("limit", n === 25 ? "" : String(n))}
+      />
+    </div>
   );
 }

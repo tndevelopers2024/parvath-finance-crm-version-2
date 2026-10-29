@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Filter, Upload, ArrowUpDown, Trash2 } from "lucide-react";
-import { date, useData, useInfiniteData, useWrite } from "./api";
+import { date, useData, useWrite } from "./api";
 import DebouncedSearch from "./DebouncedSearch";
+import { BulkWhatsAppForm } from "./Supporting";
 import {
   Avatar,
   Badge,
@@ -13,7 +14,8 @@ import {
   Metrics,
   Modal,
   PageHeading,
-  InfiniteScroll,
+  Pagination,
+  pageSizeFrom,
   Panel,
   ProductIcon,
   Tabs,
@@ -28,9 +30,11 @@ export default function Clients() {
     toast = useToast();
   const [selected, setSelected] = useState<string[]>([]),
     [bulk, setBulk] = useState(false),
+    [whatsapp, setWhatsapp] = useState(false),
     [more, setMore] = useState(false),
     [clientToDelete, setClientToDelete] = useState<any>(null);
   const canDelete = user.role === "Administrator" || user.role === "Adviser";
+  const canSelect = canDelete || user.role === "Operations";
   const write = useWrite();
   useEffect(() => {
     if (location.pathname !== "/clients") return;
@@ -54,10 +58,12 @@ export default function Clients() {
     );
     setSelected([]);
   };
+  const page = Math.max(1, Number(params.get("page")) || 1),
+    limit = pageSizeFrom(params.get("limit"), 25);
   const request = new URLSearchParams(params);
-  request.delete("page");
-  request.delete("limit");
-  const results = useInfiniteData("/clients?" + request.toString()),
+  request.set("page", String(page));
+  request.set("limit", String(limit));
+  const results = useData("/clients?" + request.toString()),
     summary = useData("/clients/summary");
   const d = summary.data?.data || {};
   return (
@@ -240,12 +246,17 @@ export default function Clients() {
             </label>
           </div>
         )}
-        {canDelete && selected.length > 0 && (
+        {canSelect && selected.length > 0 && (
           <div className="selection-bar">
             {selected.length} selected{" "}
-            <button onClick={() => setBulk(true)}>
-              Update selected status
+            <button className="primary" onClick={() => setWhatsapp(true)}>
+              Send WhatsApp
             </button>
+            {canDelete && (
+              <button onClick={() => setBulk(true)}>
+                Update selected status
+              </button>
+            )}
             <button onClick={() => setSelected([])}>Clear selection</button>
           </div>
         )}
@@ -254,23 +265,16 @@ export default function Clients() {
         ) : results.error ? (
           <ErrorState error={results.error} retry={results.refetch} />
         ) : (
-          <InfiniteScroll
-            hasMore={results.hasMore}
-            loadingMore={results.loadingMore}
-            onLoadMore={results.loadMore}
-            shown={results.data.data.length}
-            total={results.data.meta.total}
-            noun="clients"
-          >
+          <>
             <div className="table-scroll">
               <table className="clients-table">
                 <thead>
                   <tr>
-                    {canDelete && (
+                    {canSelect && (
                       <th>
                         <input
                           type="checkbox"
-                          aria-label="Select all loaded clients"
+                          aria-label="Select all clients on this page"
                           checked={
                             !!results.data.data.length &&
                             results.data.data.every((c: any) =>
@@ -308,7 +312,6 @@ export default function Clients() {
                     <th>Email</th>
                     <th>Products</th>
                     <th>Next Renewal</th>
-                    <th>Last Contact</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -322,7 +325,7 @@ export default function Clients() {
                       )[0];
                     return (
                       <tr key={c.id}>
-                        {canDelete && (
+                        {canSelect && (
                           <td>
                             <input
                               type="checkbox"
@@ -382,7 +385,6 @@ export default function Clients() {
                           </span>
                         </td>
                         <td>{date(next?.dueDate)}</td>
-                        <td>{date(c.lastContactAt)}</td>
                         <td>
                           <Badge>{c.status}</Badge>
                         </td>
@@ -420,9 +422,27 @@ export default function Clients() {
               </table>
             </div>
             {!results.data.data.length && <Empty />}
-          </InfiniteScroll>
+            <Pagination
+              total={results.data.meta.total}
+              page={page}
+              limit={limit}
+              onChange={(n) => change("page", n > 1 ? String(n) : "")}
+              onLimitChange={(n) => change("limit", n === 25 ? "" : String(n))}
+            />
+          </>
         )}
       </Panel>
+      {canSelect && whatsapp && (
+        <Modal
+          title={`WhatsApp ${selected.length} client${selected.length === 1 ? "" : "s"}`}
+          onClose={() => setWhatsapp(false)}
+        >
+          <BulkWhatsAppForm
+            ids={selected}
+            onSent={() => setSelected([])}
+          />
+        </Modal>
+      )}
       {canDelete && bulk && (
         <Modal title="Update selected clients" onClose={() => setBulk(false)}>
           <p>

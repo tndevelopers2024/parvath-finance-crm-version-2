@@ -111,7 +111,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 12px 0;
   border-bottom: 1px solid var(--ws-line);
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-shell.workspace-redesign .dashboard-outlook .outlook-row:last-child {
   border-bottom: 0;
@@ -239,7 +239,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   padding-right: 36px;
   min-height: 28px;
   line-height: 1.4;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-shell.workspace-redesign .dashboard-main > .metrics .metric strong {
   font-size: clamp(26px, 2.4vw, 38px);
@@ -252,7 +252,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   margin: 0;
   padding-top: 10px;
   border-top: 1px solid var(--ws-line);
-  font-size: 10px;
+  font-size: 11px;
 }
 .app-shell.workspace-redesign .summary-category-icon {
   position: absolute;
@@ -311,7 +311,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   margin-bottom: 26px;
 }
 .app-shell.workspace-redesign .page-heading h1 {
-  font-size: 30px;
+  font-size: 31px;
   letter-spacing: -0.8px;
 }
 .app-shell.workspace-redesign .register-heading {
@@ -323,12 +323,12 @@ html.dark .app-shell.workspace-redesign .greeting {
 }
 .app-shell.workspace-redesign .register-heading h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
 }
 .app-shell.workspace-redesign .register-heading p {
   margin: 7px 0 0;
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
 }
 .app-shell.workspace-redesign .register-count {
@@ -336,7 +336,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   padding: 8px 12px;
   border-radius: 20px;
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 .app-shell.workspace-redesign .product-register > .tabs {
@@ -363,7 +363,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   display: grid;
   gap: 7px;
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
   min-width: 180px;
 }
 .app-shell.workspace-redesign .product-category select {
@@ -383,7 +383,7 @@ html.dark .app-shell.workspace-redesign .greeting {
 }
 .app-shell.workspace-redesign .product-record strong {
   display: block;
-  font-size: 13px;
+  font-size: 14px;
 }
 .app-shell.workspace-redesign .product-record small {
   display: block;
@@ -444,7 +444,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   .app-shell.workspace-redesign .products-table td::before {
     content: attr(data-label);
     color: var(--ws-muted);
-    font-size: 10px;
+    font-size: 11px;
   }
   .app-shell.workspace-redesign .products-table td:first-child {
     padding-bottom: 16px;
@@ -537,7 +537,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   margin: 0;
 }
 .app-shell.workspace-redesign .client-onboarding-popup > .panel-heading h2 {
-  font-size: 23px;
+  font-size: 24px;
   letter-spacing: -0.6px;
 }
 .app-shell.workspace-redesign
@@ -564,14 +564,14 @@ html.dark .app-shell.workspace-redesign .greeting {
 .app-shell.workspace-redesign .client-popup-description {
   margin: 0;
   padding: 0 28px 20px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .app-shell.workspace-redesign .client-onboarding-popup .draft-notice {
   flex: none;
   margin: 0 28px 16px;
   padding: 10px 14px;
-  font-size: 11px;
+  font-size: 12px;
   border-radius: 9px;
 }
 .app-shell.workspace-redesign .client-onboarding-popup .stepper {
@@ -599,10 +599,10 @@ html.dark .app-shell.workspace-redesign .greeting {
 .app-shell.workspace-redesign .client-onboarding-popup .stepper button > span {
   width: 27px;
   height: 27px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-shell.workspace-redesign .client-onboarding-popup .step-name {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
 }
 .app-shell.workspace-redesign .client-onboarding-popup form {
@@ -637,7 +637,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   padding-bottom: 16px;
 }
 .app-shell.workspace-redesign .client-onboarding-popup .onboarding-main h2 {
-  font-size: 16px;
+  font-size: 17px;
 }
 .app-shell.workspace-redesign .client-onboarding-popup .form-grid {
   gap: 20px 24px;
@@ -707,7 +707,7 @@ html.dark .app-shell.workspace-redesign .greeting {
     gap: 10px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-footer button {
-    font-size: 11px;
+    font-size: 12px;
     padding: 10px 12px;
   }
 }
@@ -757,7 +757,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   .avatar {
   width: 100%;
   height: 100%;
-  font-size: 13px;
+  font-size: 14px;
 }
 @media (max-width: 700px) {
   .app-shell.workspace-redesign .client-onboarding-popup .onboarding-form-body {
@@ -769,7 +769,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid label,
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid legend {
-    font-size: 10px;
+    font-size: 11px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .choice-row {
     flex-wrap: wrap;
@@ -778,7 +778,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid input,
   .app-shell.workspace-redesign .client-onboarding-popup .input-with-icon {
     min-width: 0;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 .app-shell.workspace-redesign .popup-section-selector {
@@ -788,7 +788,7 @@ html.dark .app-shell.workspace-redesign .greeting {
   padding: 12px 28px 0;
   flex: none;
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .app-shell.workspace-redesign .popup-section-selector select {
   flex: 1;
@@ -921,7 +921,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   margin: 0;
   padding: 10px 28px;
   flex: none;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-heading);
   background: var(--ws-selected);
 }
@@ -945,7 +945,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   padding: 2px 0;
   min-height: 24px;
   border-radius: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: inherit;
   text-decoration: underline;
@@ -964,7 +964,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
     padding: 16px 16px 12px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup > .panel-heading h2 {
-    font-size: 20px;
+    font-size: 21px;
   }
   .app-shell.workspace-redesign
     .client-onboarding-popup
@@ -979,7 +979,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px 0;
-    font-size: 12px;
+    font-size: 13px;
   }
   .app-shell.workspace-redesign .mobile-basic-progress span {
     color: var(--ws-muted);
@@ -999,14 +999,14 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid label,
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid legend {
-    font-size: 12px;
+    font-size: 13px;
   }
   .app-shell.workspace-redesign
     .client-onboarding-popup
     .form-grid
     input:not([type="radio"]):not([type="checkbox"]),
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid select {
-    font-size: 16px;
+    font-size: 17px;
     height: 44px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .input-with-icon {
@@ -1044,7 +1044,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
     justify-content: flex-end;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-footer button {
-    font-size: 11px;
+    font-size: 12px;
     padding: 10px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-footer .primary {
@@ -1052,7 +1052,7 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   }
   .app-shell.workspace-redesign .step-notice {
     padding: 10px 16px;
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -1067,14 +1067,14 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid label,
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid legend {
-    font-size: 11px;
+    font-size: 12px;
   }
   .app-shell.workspace-redesign
     .client-onboarding-popup
     .form-grid
     input:not([type="radio"]):not([type="checkbox"]),
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid select {
-    font-size: 13px;
+    font-size: 14px;
     height: 40px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .input-with-icon {
@@ -1103,14 +1103,14 @@ html.dark .app-shell.workspace-redesign input[type="radio"] {
   }
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid label,
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid legend {
-    font-size: 12px;
+    font-size: 13px;
   }
   .app-shell.workspace-redesign
     .client-onboarding-popup
     .form-grid
     input:not([type="radio"]):not([type="checkbox"]),
   .app-shell.workspace-redesign .client-onboarding-popup .form-grid select {
-    font-size: 16px;
+    font-size: 17px;
     height: 44px;
   }
   .app-shell.workspace-redesign .client-onboarding-popup .input-with-icon {
@@ -1220,7 +1220,7 @@ html.dark .app-shell.workspace-redesign .modal {
     input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   .app-shell.workspace-redesign select,
   .app-shell.workspace-redesign textarea {
-    font-size: 16px;
+    font-size: 17px;
   }
   .app-shell.workspace-redesign .filters {
     align-items: stretch;
@@ -1300,12 +1300,12 @@ html.dark .app-shell.workspace-redesign .modal {
 }
 .product-category-card h2 {
   margin: 20px 0 8px;
-  font-size: 20px;
+  font-size: 21px;
 }
 .product-category-card p {
   color: var(--muted);
   min-height: 42px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .product-card-stats {
   display: flex;
@@ -1315,14 +1315,14 @@ html.dark .app-shell.workspace-redesign .modal {
   padding: 16px 0;
   border-top: 1px solid var(--border);
   margin-top: 20px;
-  font-size: 14px;
+  font-size: 15px;
 }
 .product-card-stats strong {
-  font-size: 20px;
+  font-size: 21px;
 }
 .product-card-open {
   color: #426d58;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 .catalogue-back {
@@ -1517,11 +1517,11 @@ html.dark .app-shell.workspace-redesign .modal {
 }
 .plan-selector strong {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
 }
 .plan-selector small {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
   margin-top: 5px;
 }
@@ -1566,7 +1566,7 @@ html.dark .app-shell.workspace-redesign .modal {
 .plan-add-client {
   margin: 4px 14px 0;
   min-height: 32px;
-  font-size: 12px;
+  font-size: 13px;
   padding: 6px 10px;
 }
 
@@ -1606,7 +1606,7 @@ html.dark .app-shell.workspace-redesign .modal {
   margin: 6px 12px 0;
   min-height: 32px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .available-products-popup {
@@ -1655,7 +1655,7 @@ html.dark .app-shell.workspace-redesign .modal {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  font-size: 16px;
+  font-size: 17px;
 }
 .detailed-product-info {
   display: grid;
@@ -1665,12 +1665,12 @@ html.dark .app-shell.workspace-redesign .modal {
 }
 .detailed-product-info dt {
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
   margin-bottom: 4px;
 }
 .detailed-product-info dd {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
 }
 .detailed-product-counts {
   display: grid;
@@ -1682,11 +1682,11 @@ html.dark .app-shell.workspace-redesign .modal {
 }
 .detailed-product-counts span {
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .detailed-product-counts strong {
   display: block;
-  font-size: 20px;
+  font-size: 21px;
   color: var(--ws-heading);
   margin-bottom: 4px;
 }
@@ -1724,13 +1724,13 @@ html.dark .app-shell.workspace-redesign .modal {
   background: var(--ws-selected);
 }
 .available-products-popup .detailed-product-heading {
-  font-size: 14px;
+  font-size: 15px;
   justify-content: flex-start;
   flex-wrap: wrap;
 }
 .compact-product-provider {
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .available-products-popup .detailed-product-counts {
   display: flex;
@@ -1744,7 +1744,7 @@ html.dark .app-shell.workspace-redesign .modal {
 }
 .available-products-popup .detailed-product-counts strong {
   display: inline;
-  font-size: 12px;
+  font-size: 13px;
   margin-right: 4px;
 }
 .available-products-popup .detailed-product-actions {
@@ -1756,7 +1756,7 @@ html.dark .app-shell.workspace-redesign .modal {
 .available-products-popup .detailed-product-actions button {
   padding: 7px 10px;
   min-height: 32px;
-  font-size: 12px;
+  font-size: 13px;
 }
 @media (max-width: 800px) {
   .available-products-popup .detailed-product {
@@ -1822,7 +1822,7 @@ html.dark .app-shell.workspace-redesign .modal {
 .available-products-popup .modal-header-actions .button {
   min-height: 34px;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 @media (max-width: 600px) {
@@ -2001,7 +2001,7 @@ input[type="reset"],
 }
 .calendar-month-controls h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 21px;
 }
 .calendar-page-toolbar .search-input {
   flex: 0 1 340px;
@@ -2009,7 +2009,7 @@ input[type="reset"],
 .calendar-month-summary {
   color: var(--ws-muted);
   margin: 14px 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 .calendar-month-grid {
   display: grid;
@@ -2026,7 +2026,7 @@ input[type="reset"],
   background: var(--ws-soft);
   padding: 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-shell.workspace-redesign button.calendar-date-cell {
   border-radius: 0 !important;
@@ -2059,7 +2059,7 @@ input[type="reset"],
   text-decoration: underline;
 }
 .calendar-event-chip {
-  font-size: 10px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2081,7 +2081,7 @@ input[type="reset"],
   color: #6d4692;
 }
 .calendar-more {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ws-green);
 }
 .calendar-agenda-row {
@@ -2094,7 +2094,7 @@ input[type="reset"],
 .calendar-agenda-time {
   min-width: 75px;
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .calendar-agenda-person {
   flex: 1;
@@ -2156,7 +2156,7 @@ input[type="reset"],
   margin: 0;
 }
 .apple-calendar .calendar-month-controls h2 {
-  font-size: 26px;
+  font-size: 27px;
   letter-spacing: -0.6px;
   font-weight: 600;
 }
@@ -2171,7 +2171,7 @@ input[type="reset"],
   background: var(--ws-soft);
   min-height: 30px;
   padding: 6px 18px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .app-shell.workspace-redesign
   .calendar-view-switch
@@ -2190,7 +2190,7 @@ input[type="reset"],
   border-right: 1px solid var(--ws-line);
 }
 .apple-calendar-sidebar h3 {
-  font-size: 12px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--ws-muted);
@@ -2225,7 +2225,7 @@ input[type="reset"],
   background: #b069c8;
 }
 .calendar-sidebar-tip {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
   line-height: 1.6;
   margin-top: 24px;
@@ -2239,7 +2239,7 @@ input[type="reset"],
   padding: 10px 12px;
   background: var(--ws-surface);
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .app-shell.workspace-redesign .apple-calendar button.calendar-date-cell {
   min-height: 125px;
@@ -2259,7 +2259,7 @@ input[type="reset"],
   height: 26px;
   display: grid;
   place-items: center;
-  font-size: 13px;
+  font-size: 14px;
 }
 .apple-calendar .calendar-date-cell.selected .calendar-date-number {
   background: var(--ws-green);
@@ -2273,7 +2273,7 @@ input[type="reset"],
   text-decoration: none;
 }
 .apple-calendar .calendar-event-chip {
-  font-size: 10px;
+  font-size: 11px;
   border-radius: 4px;
   padding: 4px 5px;
 }
@@ -2307,7 +2307,7 @@ input[type="reset"],
 .calendar-list-entry span,
 .calendar-list-entry small {
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .calendar-list-entry strong {
   flex: 1;
@@ -2344,7 +2344,7 @@ input[type="reset"],
     padding: 4px;
   }
   .apple-calendar .calendar-event-chip {
-    font-size: 9px;
+    font-size: 10px;
     padding: 3px;
   }
   .apple-calendar .calendar-weekday {
@@ -2352,10 +2352,10 @@ input[type="reset"],
     text-align: center;
   }
   .apple-calendar .calendar-more {
-    font-size: 9px;
+    font-size: 10px;
   }
   .apple-calendar .calendar-month-controls h2 {
-    font-size: 21px;
+    font-size: 22px;
   }
 }
 
@@ -2370,7 +2370,7 @@ input[type="reset"],
 .calendar-day-entry time {
   min-width: 75px;
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .calendar-day-entry > div {
   flex: 1;
@@ -2510,12 +2510,12 @@ input[type="reset"],
   gap: 16px;
 }
 .provider-heading h2 {
-  font-size: 18px;
+  font-size: 19px;
   margin: 0;
   flex: 1;
 }
 .provider-heading span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .provider-plans {
@@ -2538,7 +2538,7 @@ input[type="reset"],
   display: block;
   flex: 1;
   padding: 14px;
-  font-size: 13px;
+  font-size: 14px;
   overflow-wrap: anywhere;
 }
 .provider-plan-actions {
@@ -2550,7 +2550,7 @@ input[type="reset"],
 .provider-plan-actions .button {
   min-height: 32px;
   padding: 6px 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .provider-plans small {
   display: block;
@@ -2571,7 +2571,7 @@ input[type="reset"],
   border-radius: 999px;
   background: var(--ws-selected);
   color: var(--ws-green);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -2587,7 +2587,7 @@ input[type="reset"],
   background: transparent;
   box-shadow: none;
   border-radius: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-green);
   font-weight: 500;
 }
@@ -2618,17 +2618,17 @@ input[type="reset"],
   padding: 20px;
 }
 .catalogue-metric > span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .catalogue-metric > strong {
-  font-size: 30px;
+  font-size: 31px;
   font-weight: 600;
   letter-spacing: -1px;
   color: var(--ws-heading);
 }
 .catalogue-metric > small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ws-muted);
 }
 .catalogue-register {
@@ -2647,11 +2647,11 @@ input[type="reset"],
 }
 .catalogue-register-title h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
 }
 .catalogue-register-title p {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .catalogue-filters {
@@ -2666,7 +2666,7 @@ input[type="reset"],
 .catalogue-filters select {
   width: auto;
   max-width: 240px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .catalogue-table-scroll {
   overflow-x: auto;
@@ -2675,12 +2675,12 @@ input[type="reset"],
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
 }
 .catalogue-table th {
   padding: 13px 20px;
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   background: var(--ws-soft);
   white-space: nowrap;
@@ -2709,12 +2709,12 @@ input[type="reset"],
   display: block;
   margin-top: 6px;
   color: var(--ws-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .catalogue-tag {
   display: inline-block;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12px;
   padding: 5px 8px;
   border: 1px solid var(--ws-line);
   border-radius: 6px;
@@ -2726,7 +2726,7 @@ input[type="reset"],
   white-space: nowrap;
 }
 .app-shell.workspace-redesign .catalogue-row-actions .button {
-  font-size: 11px;
+  font-size: 12px;
   padding: 7px 10px;
   min-height: 32px;
   border-radius: 7px;
@@ -2758,11 +2758,11 @@ input[type="reset"],
 }
 .catalogue-provider-toggle strong {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
 }
 .catalogue-provider-toggle small {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ws-muted);
   margin-top: 6px;
 }
@@ -2779,7 +2779,7 @@ input[type="reset"],
 }
 .catalogue-provider-empty {
   padding: 0 24px 20px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .catalogue-footer {
   display: flex;
@@ -2789,7 +2789,7 @@ input[type="reset"],
   border-top: 1px solid var(--ws-line);
   padding: 16px 24px;
   color: var(--ws-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .catalogue-footer > div {
   display: flex;
@@ -2849,7 +2849,7 @@ input[type="reset"],
 }
 .catalogue-delete-notice p {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.6;
   white-space: normal;
 }
@@ -2865,7 +2865,7 @@ input[type="reset"],
 .catalogue-delete-guidance > strong {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .catalogue-delete-buttons {
   display: flex;
@@ -2881,7 +2881,7 @@ input[type="reset"],
   .button {
   padding: 10px 16px;
   min-height: 40px;
-  font-size: 13px;
+  font-size: 14px;
   white-space: normal;
 }
 
@@ -2897,7 +2897,7 @@ input[type="reset"],
   padding-top: 8px;
 }
 .settings-nav-caption {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.3px;
   color: var(--ws-muted);
   padding: 0 12px 12px;
@@ -2915,7 +2915,7 @@ input[type="reset"],
 .settings-navigation > button span {
   display: block;
   margin-top: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--ws-muted);
 }
@@ -2939,14 +2939,14 @@ input[type="reset"],
 .settings-identity strong,
 .settings-profile-summary strong {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
 }
 .settings-identity small,
 .settings-profile-summary small {
   display: block;
   color: var(--ws-muted);
   margin-top: 5px;
-  font-size: 12px;
+  font-size: 13px;
   overflow-wrap: anywhere;
 }
 .settings-content {
@@ -2960,7 +2960,7 @@ input[type="reset"],
 }
 .settings-description {
   color: var(--ws-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
   margin: 0 0 24px;
 }
@@ -2981,11 +2981,11 @@ input[type="reset"],
 .settings-form label {
   display: grid;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   max-width: 560px;
 }
 .settings-form label small {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   color: var(--ws-muted);
   line-height: 1.5;
@@ -3054,7 +3054,7 @@ input[type="reset"],
   gap: 8px;
   width: 100%;
   padding: 8px 3px 2px;
-  font-size: 12px;
+  font-size: 13px;
 }
 .settings-theme-label > svg:last-child:not(:first-child) {
   margin-left: auto;
@@ -3064,12 +3064,12 @@ input[type="reset"],
   grid-template-columns: 1fr auto;
   gap: 8px;
   padding: 20px 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .settings-context small {
   grid-column: 1 / -1;
-  font-size: 11px;
+  font-size: 12px;
 }
 @media (max-width: 800px) {
   .settings-workspace {
@@ -3120,7 +3120,7 @@ input[type="reset"],
 .app-shell.workspace-redesign .profile-header .avatar.large {
   width: 72px;
   height: 72px;
-  font-size: 24px;
+  font-size: 25px;
 }
 .app-shell.workspace-redesign .profile-identity {
   min-width: 0;
@@ -3133,7 +3133,7 @@ input[type="reset"],
   gap: 8px;
 }
 .app-shell.workspace-redesign .profile-identity h1 {
-  font-size: 24px;
+  font-size: 25px;
   overflow-wrap: anywhere;
   line-height: 1.3;
 }
@@ -3214,7 +3214,7 @@ input[type="reset"],
 }
 .modal.notifications-popup > .panel-heading h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
 }
 .modal.notifications-popup > .panel-heading > button {
   width: 30px;
@@ -3232,18 +3232,18 @@ input[type="reset"],
   width: auto;
   min-width: 0;
   padding: 4px 8px;
-  font-size: 10px;
+  font-size: 11px;
 }
 .notifications-list .notification-copy strong {
   display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 .notifications-list .notification-copy small {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 3px;
 }
 .notifications-list .notification-row > svg {
@@ -3272,7 +3272,7 @@ input[type="reset"],
   padding: 0 4px;
   display: grid;
   place-items: center;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -3342,7 +3342,7 @@ input[type="reset"],
   gap: 6px;
 }
 .app-shell.workspace-redesign .page-content:has(.worklist-layout) .metric strong {
-  font-size: 28px;
+  font-size: 29px;
   margin: 10px 0 6px;
   line-height: 1.2;
 }
@@ -3385,7 +3385,7 @@ input[type="reset"],
 }
 .app-shell.workspace-redesign .dashboard-calendar .calendar-legend b {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--ws-heading);
 }
@@ -3450,7 +3450,7 @@ input[type="reset"],
   padding: 8px 4px 16px;
 }
 .app-shell.workspace-redesign .lead-column header p {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 .app-shell.workspace-redesign .lead-column-cards {
@@ -3470,7 +3470,7 @@ input[type="reset"],
 .app-shell.workspace-redesign .lead-card-profile .avatar {
   width: 32px;
   height: 32px;
-  font-size: 11px;
+  font-size: 12px;
   background: var(--ws-soft);
   border-radius: 8px;
 }
@@ -3479,7 +3479,7 @@ input[type="reset"],
   white-space: normal;
   overflow-wrap: anywhere;
   padding-right: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   font-weight: 600;
 }
@@ -3487,7 +3487,7 @@ input[type="reset"],
   align-items: flex-start;
   gap: 7px;
   white-space: normal;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   margin: 14px 0;
 }
@@ -3546,7 +3546,7 @@ input[type="reset"],
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
 }
 .app-shell.workspace-redesign .lead-board-nav > div {
@@ -3660,7 +3660,7 @@ input[type="reset"],
     height: 80px;
   }
   .settings-page .settings-theme-label {
-    font-size: 11px;
+    font-size: 12px;
     gap: 4px;
   }
 }
@@ -3700,7 +3700,7 @@ input[type="reset"],
 }
 .infinite-footer {
   padding: 12px 4px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ws-muted);
   text-align: center;
 }

@@ -1,0 +1,404 @@
+/* App-wide typeface and base size. Loaded last so it wins over earlier font declarations. */
+:root {
+  --font-sans: Lora, Georgia, "Times New Roman", serif;
+  font-size: 17px;
+}
+html,
+body,
+.app-shell,
+.app-shell.workspace-redesign,
+button,
+input,
+select,
+textarea {
+  font-family: Lora, Georgia, "Times New Roman", serif;
+}
+body {
+  font-size: 1rem;
+  font-weight: 500;
+}
+input,
+button,
+select,
+textarea {
+  font-weight: 500;
+}
+
+/* Add/Edit client page: one consistent gutter, fluid columns, footer inside the page frame. */
+.app-shell.workspace-redesign .onboarding {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-shell.workspace-redesign .onboarding > .back-link,
+.app-shell.workspace-redesign .onboarding > .page-heading,
+.app-shell.workspace-redesign .onboarding > .draft-notice {
+  margin: 0;
+}
+.app-shell.workspace-redesign .onboarding .stepper {
+  margin: 0;
+  padding: 14px 24px;
+}
+.app-shell.workspace-redesign .onboarding form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-shell.workspace-redesign .onboarding .onboarding-main {
+  padding: 28px;
+  min-height: 0;
+}
+.app-shell.workspace-redesign .onboarding .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 28px;
+  max-width: none;
+}
+.app-shell.workspace-redesign .onboarding .form-footer {
+  margin: 0;
+  padding: 16px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+}
+@media (max-width: 760px) {
+  .app-shell.workspace-redesign .onboarding .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Dashboard: even vertical rhythm between the summary cards, attention/calendar row and renewals. */
+.dashboard-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Client profile: gap between the header card and the content, evenly spaced tabs and grids. */
+.app-shell.workspace-redesign .profile-top {
+  margin-bottom: 16px;
+}
+.app-shell.workspace-redesign .profile-top .tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px;
+  overflow-x: auto;
+}
+.app-shell.workspace-redesign .profile-top .tabs button {
+  flex-shrink: 1;
+  min-height: 42px;
+  padding: 10px 12px;
+  font-size: 13px;
+  text-align: center;
+  justify-content: center;
+}
+.app-shell.workspace-redesign .profile-layout {
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-main .metrics {
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-details {
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-shell.workspace-redesign .profile-right > .panel,
+.app-shell.workspace-redesign .profile-details .panel {
+  margin: 0;
+}
+.app-shell.workspace-redesign .profile-details .panel,
+.app-shell.workspace-redesign .profile-right .panel {
+  padding: 20px;
+}
+.app-shell.workspace-redesign .page-content .profile-main .metrics > .summary-card strong {
+  font-size: 22px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Collapsible sidebar groups. */
+.app-shell.workspace-redesign .sidebar nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.app-shell.workspace-redesign .sidebar .nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.app-shell.workspace-redesign .sidebar .nav-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 12px 0 2px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.app-shell.workspace-redesign .sidebar .nav-group-toggle:hover {
+  color: var(--color-heading);
+}
+.app-shell.workspace-redesign .sidebar .nav-group-toggle svg {
+  transition: transform 0.18s ease;
+}
+.app-shell.workspace-redesign .sidebar .nav-group-toggle svg.collapsed {
+  transform: rotate(-90deg);
+}
+.app-shell.workspace-redesign .sidebar .nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.app-shell.workspace-redesign .sidebar .nav-group-items.is-collapsed {
+  display: none;
+}
+/* In the narrow icon-only rail every icon stays reachable. */
+.app-shell.workspace-redesign .sidebar--mini .nav-group-items.is-collapsed {
+  display: flex;
+}
+.app-shell.workspace-redesign .sidebar--mini .nav-group-toggle svg {
+  display: none;
+}
+
+/* Client form steps: stacked section cards with room to breathe. */
+.app-shell.workspace-redesign .onboarding .onboard-sections,
+.app-shell.workspace-redesign .onboarding .onboard-sections.two-columns,
+.app-shell.workspace-redesign .onboarding .onboard-split.two-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-sections.two-columns > div,
+.app-shell.workspace-redesign .onboarding .onboard-split.two-columns > div {
+  display: contents;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section {
+  padding: 24px 28px;
+  border-radius: 16px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section-head {
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section h3 {
+  font-size: 17px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-fields {
+  gap: 20px 28px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-fields.two-columns {
+  gap: 20px 28px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-fields.three-columns {
+  gap: 20px 24px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-field {
+  gap: 8px;
+  font-size: 13px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-field input,
+.app-shell.workspace-redesign .onboarding .onboard-field select {
+  height: 44px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-check-grid {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px 20px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-check-grid label,
+.app-shell.workspace-redesign .onboarding .onboard-inline {
+  font-size: 14px;
+  gap: 10px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section p {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0 0 14px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section > * + * {
+  margin-top: 18px;
+}
+.app-shell.workspace-redesign .onboarding .onboard-section-head + * {
+  margin-top: 0;
+}
+
+/* Wide client table: tighter cell padding so every column, including the Status badge, fits beside the pinned Actions column. */
+.app-shell.workspace-redesign .clients-table {
+  min-width: 0;
+}
+.app-shell.workspace-redesign .clients-table th,
+.app-shell.workspace-redesign .clients-table td {
+  padding-inline: 5px;
+}
+.app-shell.workspace-redesign .clients-table td:nth-last-child(2),
+.app-shell.workspace-redesign .clients-table th:nth-last-child(2) {
+  min-width: 112px;
+}
+.app-shell.workspace-redesign .clients-table td:nth-last-child(n + 3):nth-child(n + 5) {
+  white-space: nowrap;
+}
+
+/* Client header: Last Contact / Next Follow-up sit in the empty space on the right. */
+.app-shell.workspace-redesign .profile-header {
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  column-gap: 16px;
+}
+.app-shell.workspace-redesign .profile-header-actions {
+  display: contents;
+}
+.app-shell.workspace-redesign .profile-header-actions > div {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+.app-shell.workspace-redesign .profile-header-actions > p {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: start;
+  display: flex;
+  gap: 32px;
+  margin: 0;
+  padding: 4px 8px 0 0;
+}
+.app-shell.workspace-redesign .profile-header-actions > p span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+  padding-left: 16px;
+  border-left: 1px solid var(--color-border);
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.app-shell.workspace-redesign .profile-header-actions > p strong {
+  font-size: 16px;
+  color: var(--color-heading);
+}
+@media (max-width: 900px) {
+  .app-shell.workspace-redesign .profile-header {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .app-shell.workspace-redesign .profile-header-actions > p {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+}
+
+/* Leads: board / table switch next to Add Lead, and a drag overlay that floats above every column. */
+.app-shell.workspace-redesign .lead-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+.app-shell.workspace-redesign .lead-toolbar .lead-add-bar {
+  flex: 1;
+  margin: 0;
+}
+.app-shell.workspace-redesign .lead-view-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--ws-surface);
+}
+.app-shell.workspace-redesign .lead-view-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.app-shell.workspace-redesign .lead-view-toggle button.active {
+  background: #2c4a8c;
+  color: #fff;
+}
+.app-shell.workspace-redesign .lead-card {
+  cursor: grab;
+  touch-action: pan-y;
+}
+.app-shell.workspace-redesign .lead-card.dragging {
+  opacity: 0.35;
+  transform: none;
+}
+.app-shell.workspace-redesign .lead-card.lead-card-overlay {
+  cursor: grabbing;
+  opacity: 1;
+  box-shadow: 0 16px 36px rgb(20 33 61 / 28%);
+  transform: rotate(2deg);
+}
+.lead-board {
+  /* Cards are lifted into the overlay while dragging, so the board need not clip or stack them. */
+  isolation: auto;
+}
+.app-shell.workspace-redesign .lead-table-wrap {
+  background: var(--ws-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  padding: 8px 20px 20px;
+}
+.app-shell.workspace-redesign .lead-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.app-shell.workspace-redesign .lead-table th,
+.app-shell.workspace-redesign .lead-table td {
+  padding: 14px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+.app-shell.workspace-redesign .lead-table th {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+.app-shell.workspace-redesign .lead-table-requirement {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Collapsed (icon-only) sidebar: hide the group headings and arrows; every icon stays visible. */
+.app-shell.workspace-redesign .sidebar--mini .nav-group-toggle {
+  display: none;
+}
+.app-shell.workspace-redesign .sidebar--mini .nav-group,
+.app-shell.workspace-redesign .sidebar--mini .nav-group-items {
+  align-items: center;
+}
+
+/* Clients table: breathing room around the checkbox column. */
+.app-shell.workspace-redesign .clients-table th:first-child,
+.app-shell.workspace-redesign .clients-table td:first-child {
+  width: 52px;
+  padding-left: 18px;
+  padding-right: 8px;
+}

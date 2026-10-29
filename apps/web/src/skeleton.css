@@ -45,8 +45,8 @@ html.dark .skeleton-block::after { background: linear-gradient(90deg, transparen
   border: 1px solid var(--color-border);
 }
 .workspace-loader-mark img { width: 40px; height: 40px; object-fit: contain; }
-.workspace-loader p { margin: 22px 0 6px; font-size: 16px; font-weight: 600; }
-.workspace-loader-caption { font-size: 12px; color: var(--color-muted); }
+.workspace-loader p { margin: 22px 0 6px; font-size: 17px; font-weight: 600; }
+.workspace-loader-caption { font-size: 13px; color: var(--color-muted); }
 .workspace-loader-progress {
   width: 120px;
   height: 3px;

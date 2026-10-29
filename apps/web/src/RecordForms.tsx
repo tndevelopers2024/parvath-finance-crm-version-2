@@ -121,6 +121,16 @@ export function NewRecord({
           premiumMinor: f.premium ? toMinor(f.premium) : undefined,
           principalMinor: f.principal ? toMinor(f.principal) : undefined,
           expectedCommissionMinor: toMinor(f.commission || "0"),
+          renewal:
+            f.renewalFrequency && f.nextRenewal
+              ? {
+                  frequencyMonths:
+                    f.renewalFrequency === "once"
+                      ? null
+                      : Number(f.renewalFrequency),
+                  nextDueDate: f.nextRenewal,
+                }
+              : undefined,
         };
       const r = await write.mutateAsync({ path: "/" + type, body });
       toast(title.replace("Add", "") + " created");
@@ -311,6 +321,20 @@ export function NewRecord({
                 <label>
                   Annual Premium (₹)
                   <input name="premium" type="number" min="0" step="0.01" />
+                </label>
+                <label>
+                  Renewal Frequency *
+                  <select name="renewalFrequency" required defaultValue="12">
+                    <option value="1">Monthly</option>
+                    <option value="3">Quarterly</option>
+                    <option value="6">Half-yearly</option>
+                    <option value="12">Yearly</option>
+                    <option value="once">One-time (single premium)</option>
+                  </select>
+                </label>
+                <label>
+                  Next Renewal Date *
+                  <DateField name="nextRenewal" required />
                 </label>
                 <label>
                   Principal (₹)
@@ -615,7 +639,26 @@ export function LeadDetail() {
               try {
                 await write.mutateAsync({
                   path: `/leads/${id}/convert`,
-                  body: { ...f, version: l.version, accepted: true },
+                  body: {
+                    definitionId: f.definitionId,
+                    identifier: f.identifier || undefined,
+                    startDate: f.startDate || undefined,
+                    status: f.status,
+                    premiumMinor: f.premium ? toMinor(f.premium) : undefined,
+                    expectedCommissionMinor: toMinor(f.commission || "0"),
+                    renewal:
+                      f.renewalFrequency && f.nextRenewal
+                        ? {
+                            frequencyMonths:
+                              f.renewalFrequency === "once"
+                                ? null
+                                : Number(f.renewalFrequency),
+                            nextDueDate: f.nextRenewal,
+                          }
+                        : undefined,
+                    version: l.version,
+                    accepted: true,
+                  },
                 });
                 setAccept(false);
                 toast("Sale accepted. Product application created.");
@@ -633,6 +676,45 @@ export function LeadDetail() {
                 onRetry={() => void catalogue.refetch()}
               />
             </label>
+            <div className="form-grid">
+              <label>
+                Policy / Application Number
+                <input name="identifier" minLength={3} />
+              </label>
+              <label>
+                Start Date
+                <DateField name="startDate" />
+              </label>
+              <label>
+                Fulfilment Status
+                <select name="status" defaultValue="Application">
+                  <option>Application</option>
+                  <option>Active</option>
+                </select>
+              </label>
+              <label>
+                Annual Premium (₹)
+                <input name="premium" type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                Renewal Frequency *
+                <select name="renewalFrequency" required defaultValue="12">
+                  <option value="1">Monthly</option>
+                  <option value="3">Quarterly</option>
+                  <option value="6">Half-yearly</option>
+                  <option value="12">Yearly</option>
+                  <option value="once">One-time (single premium)</option>
+                </select>
+              </label>
+              <label>
+                Next Renewal Date *
+                <DateField name="nextRenewal" required />
+              </label>
+              <label>
+                Expected Commission (₹)
+                <input name="commission" type="number" min="0" step="0.01" />
+              </label>
+            </div>
             <label className="choice-row">
               <input required type="checkbox" />
               The client has accepted this proposal

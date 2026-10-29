@@ -21,9 +21,7 @@ async function lockContactChanges(tx: Database, organizationId: string) {
       { session: tx.session, upsert: true },
     );
 }
-import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { config } from "./config.js";
-import { s3 } from "./documents.js";
+import { deleteObject } from "./storage.js";
 import { logger } from "./app.js";
 import { audit, HttpError, owned, permit } from "./security.js";
 import {
@@ -808,13 +806,11 @@ clients.delete("/:id", permit("edit"), async (req, res) => {
   });
   // The client is gone; storage cleanup failures must not fail the request. Leftover keys are
   // logged (no retry job exists for them yet).
-  if (config.S3_BUCKET && objectKeys.length) {
+  if (objectKeys.length) {
     const leftover: string[] = [];
     for (const key of objectKeys) {
       try {
-        await s3.send(
-          new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key }),
-        );
+        await deleteObject(key);
       } catch {
         leftover.push(key);
       }

@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import {
+  api,
   date,
   query,
   rupees,
@@ -607,24 +608,217 @@ export function Engagement({ compose = false }: { compose?: boolean }) {
 const broadcastBatch = 100;
 const broadcastLimit = 1000;
 type Picked = { id: string; name: string; phone?: string; kind?: string };
-// Sends one approved WhatsApp template to many clients. The picker pages through every
-// client, and the send goes out in batches of 100, the server's per-request limit.
-function WhatsAppBroadcast() {
+// Template, message, optional image and the batched send, shared by the WhatsApp tab and the clients list.
+export function BulkWhatsAppForm({
+  ids,
+  onSent,
+}: {
+  ids: string[];
+  onSent?: () => void;
+}) {
   const write = useWrite(),
     toast = useToast(),
     user = useAuth();
   const connection = user.integrations?.whatsapp;
   const unavailable = connection && !connection.available;
-  const [search, setSearch] = useState(""),
-    [term, setTerm] = useState(""),
-    [picked, setPicked] = useState<Record<string, Picked>>({}),
-    [template, setTemplate] = useState(""),
+  const [template, setTemplate] = useState(""),
     [language, setLanguage] = useState("en_US"),
     [message, setMessage] = useState(""),
+    [image, setImage] = useState<File>(),
+    [imageError, setImageError] = useState(""),
     [sending, setSending] = useState(false),
     [progress, setProgress] = useState(""),
     [sendError, setSendError] = useState(""),
     [result, setResult] = useState<any>(null);
+  const send = async () => {
+    if (!ids.length || !template.trim() || !message.trim()) return;
+    if (
+      !window.confirm(
+        `Send this WhatsApp message${image ? " with the image" : ""} to ${ids.length} selected client${ids.length === 1 ? "" : "s"}? Clients without a phone number or WhatsApp consent are skipped.`,
+      )
+    )
+      return;
+    setSending(true);
+    setSendError("");
+    setResult(null);
+    const total = {
+      sent: 0,
+      failed: 0,
+      skipped: [] as any[],
+      failures: [] as any[],
+    };
+    const batches = Math.ceil(ids.length / broadcastBatch);
+    try {
+      let imageId: string | undefined;
+      if (image) {
+        setProgress("Uploading image…");
+        const body = new FormData();
+        body.append("file", image);
+        const uploaded: any = await api("/whatsapp/media", {
+          method: "POST",
+          body,
+        });
+        imageId = uploaded.data.id;
+      }
+      for (let i = 0; i < ids.length; i += broadcastBatch) {
+        setProgress(`Sending batch ${i / broadcastBatch + 1} of ${batches}…`);
+        const response: any = await write.mutateAsync({
+          path: "/whatsapp/broadcasts",
+          body: {
+            clientIds: ids.slice(i, i + broadcastBatch),
+            template: template.trim(),
+            language: language.trim() || "en_US",
+            message: message.trim(),
+            ...(imageId ? { imageId } : {}),
+          },
+        });
+        total.sent += response.data.sent;
+        total.failed += response.data.failed;
+        total.skipped.push(...response.data.skipped);
+        total.failures.push(...response.data.failures);
+      }
+      setResult(total);
+      setMessage("");
+      setImage(undefined);
+      onSent?.();
+      toast(`Broadcast sent to ${total.sent} clients`);
+    } catch (error) {
+      setSendError(
+        (error as Error).message ||
+          "The broadcast stopped. Check the history below before retrying.",
+      );
+    } finally {
+      setSending(false);
+      setProgress("");
+    }
+  };
+  return (
+    <>
+      {unavailable && (
+        <p className="integration-note" role="status">
+          {connection.message} No messages can be sent until then.
+        </p>
+      )}
+      <div className="form-grid">
+        <label>
+          Approved template name *
+          <input
+            value={template}
+            onChange={(e) => setTemplate(e.target.value)}
+            placeholder="e.g. policy_renewal_reminder"
+          />
+        </label>
+        <label>
+          Template language
+          <input
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            placeholder="en_US"
+          />
+        </label>
+        <label className="full">
+          Message (fills the template’s {"{{1}}"}) *
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={1000}
+            placeholder="Type the message that every selected client will receive…"
+          />
+        </label>
+        <label className="full">
+          Image (optional)
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={(e) => {
+              const selected = e.target.files?.[0];
+              setImage(undefined);
+              setImageError("");
+              if (!selected) return;
+              if (
+                !["image/jpeg", "image/png"].includes(selected.type) ||
+                selected.size > 5 * 1024 * 1024
+              ) {
+                setImageError("Choose a JPG or PNG image up to 5 MB.");
+                e.target.value = "";
+                return;
+              }
+              setImage(selected);
+            }}
+          />
+          <small className="muted">
+            The template must be approved with an image header to show it.
+          </small>
+          {imageError && (
+            <small className="field-error" role="alert">
+              {imageError}
+            </small>
+          )}
+        </label>
+      </div>
+      {sendError && (
+        <div role="alert" className="form-error">
+          {sendError}
+        </div>
+      )}
+      {result && (
+        <div className="broadcast-result">
+          <strong>
+            {result.sent} sent · {result.failed} failed ·{" "}
+            {result.skipped.length} skipped
+          </strong>
+          {result.skipped.length > 0 && (
+            <ul>
+              {result.skipped.slice(0, 20).map((s: any) => (
+                <li key={s.clientId}>
+                  {s.name}: {s.reason}
+                </li>
+              ))}
+              {result.skipped.length > 20 && (
+                <li>and {result.skipped.length - 20} more skipped</li>
+              )}
+            </ul>
+          )}
+          {result.failures.length > 0 && (
+            <ul>
+              {result.failures.slice(0, 20).map((f: any) => (
+                <li key={f.clientId}>
+                  {f.name}: {f.error}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="modal-actions">
+        {progress && <span className="muted">{progress}</span>}
+        <button
+          type="button"
+          className="primary"
+          disabled={
+            unavailable ||
+            sending ||
+            !ids.length ||
+            !template.trim() ||
+            !message.trim()
+          }
+          onClick={() => void send()}
+        >
+          {sending
+            ? "Sending…"
+            : `Send to ${ids.length} client${ids.length === 1 ? "" : "s"}`}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// Sends one approved WhatsApp template to many clients. The picker pages through every
+// client, and the send goes out in batches of 100, the server's per-request limit.
+function WhatsAppBroadcast() {
+  const [search, setSearch] = useState(""),
+    [term, setTerm] = useState(""),
+    [picked, setPicked] = useState<Record<string, Picked>>({});
   useEffect(() => {
     const timer = setTimeout(() => setTerm(search.trim()), 250);
     return () => clearTimeout(timer);
@@ -647,10 +841,25 @@ function WhatsAppBroadcast() {
         };
       return next;
     });
-  const selectLoaded = () =>
+  const [loadingAll, setLoadingAll] = useState(false);
+  // Pages through every client matching the search, then selects them (up to the limit).
+  const selectLoaded = async () => {
+    setLoadingAll(true);
+    let pages = clients.data?.pages || [];
+    let more = clients.hasNextPage;
+    try {
+      while (more && pages.flatMap((p: any) => p?.data || []).length < broadcastLimit) {
+        const next = await clients.fetchNextPage();
+        pages = next.data?.pages || pages;
+        more = next.hasNextPage;
+      }
+    } finally {
+      setLoadingAll(false);
+    }
+    const all: Picked[] = pages.flatMap((p: any) => p?.data || []);
     setPicked((current) => {
       const next = { ...current };
-      for (const row of rows) {
+      for (const row of all) {
         if (Object.keys(next).length >= broadcastLimit) break;
         next[row.id] = {
           id: row.id,
@@ -661,55 +870,6 @@ function WhatsAppBroadcast() {
       }
       return next;
     });
-  const send = async () => {
-    if (!chosen.length || !template.trim() || !message.trim()) return;
-    if (
-      !window.confirm(
-        `Send this WhatsApp message to ${chosen.length} selected client${chosen.length === 1 ? "" : "s"}? Clients without a phone number or WhatsApp consent are skipped.`,
-      )
-    )
-      return;
-    setSending(true);
-    setSendError("");
-    setResult(null);
-    const total = {
-      sent: 0,
-      failed: 0,
-      skipped: [] as any[],
-      failures: [] as any[],
-    };
-    const ids = chosen.map((c) => c.id);
-    const batches = Math.ceil(ids.length / broadcastBatch);
-    try {
-      for (let i = 0; i < ids.length; i += broadcastBatch) {
-        setProgress(`Sending batch ${i / broadcastBatch + 1} of ${batches}…`);
-        const response: any = await write.mutateAsync({
-          path: "/whatsapp/broadcasts",
-          body: {
-            clientIds: ids.slice(i, i + broadcastBatch),
-            template: template.trim(),
-            language: language.trim() || "en_US",
-            message: message.trim(),
-          },
-        });
-        total.sent += response.data.sent;
-        total.failed += response.data.failed;
-        total.skipped.push(...response.data.skipped);
-        total.failures.push(...response.data.failures);
-      }
-      setResult(total);
-      setPicked({});
-      setMessage("");
-      toast(`Broadcast sent to ${total.sent} clients`);
-    } catch (error) {
-      setSendError(
-        (error as Error).message ||
-          "The broadcast stopped. Check the history below before retrying.",
-      );
-    } finally {
-      setSending(false);
-      setProgress("");
-    }
   };
   return (
     <Panel title="Broadcast to many clients" className="record-form">
@@ -717,11 +877,6 @@ function WhatsAppBroadcast() {
         Choose clients, then send one approved WhatsApp template. Each client
         gets the message as its {"{{1}}"} variable.
       </p>
-      {unavailable && (
-        <p className="integration-note" role="status">
-          {connection.message} No messages can be sent until then.
-        </p>
-      )}
       <div className="form-grid">
         <label className="full">
           Search clients
@@ -775,8 +930,12 @@ function WhatsAppBroadcast() {
         <span className="muted">
           {chosen.length} selected (max {broadcastLimit})
         </span>
-        <button type="button" onClick={selectLoaded} disabled={!rows.length}>
-          Select all shown
+        <button
+          type="button"
+          onClick={() => void selectLoaded()}
+          disabled={!rows.length || loadingAll}
+        >
+          {loadingAll ? "Selecting…" : "Select all"}
         </button>
         <button
           type="button"
@@ -786,86 +945,7 @@ function WhatsAppBroadcast() {
           Clear selection
         </button>
       </div>
-      <div className="form-grid">
-        <label>
-          Approved template name *
-          <input
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            placeholder="e.g. policy_renewal_reminder"
-          />
-        </label>
-        <label>
-          Template language
-          <input
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            placeholder="en_US"
-          />
-        </label>
-        <label className="full">
-          Message (fills the template’s {"{{1}}"}) *
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            maxLength={1000}
-            placeholder="Type the message that every selected client will receive…"
-          />
-        </label>
-      </div>
-      {sendError && (
-        <div role="alert" className="form-error">
-          {sendError}
-        </div>
-      )}
-      {result && (
-        <div className="broadcast-result">
-          <strong>
-            {result.sent} sent · {result.failed} failed ·{" "}
-            {result.skipped.length} skipped
-          </strong>
-          {result.skipped.length > 0 && (
-            <ul>
-              {result.skipped.slice(0, 20).map((s: any) => (
-                <li key={s.clientId}>
-                  {s.name}: {s.reason}
-                </li>
-              ))}
-              {result.skipped.length > 20 && (
-                <li>and {result.skipped.length - 20} more skipped</li>
-              )}
-            </ul>
-          )}
-          {result.failures.length > 0 && (
-            <ul>
-              {result.failures.slice(0, 20).map((f: any) => (
-                <li key={f.clientId}>
-                  {f.name}: {f.error}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <div className="modal-actions">
-        {progress && <span className="muted">{progress}</span>}
-        <button
-          type="button"
-          className="primary"
-          disabled={
-            unavailable ||
-            sending ||
-            !chosen.length ||
-            !template.trim() ||
-            !message.trim()
-          }
-          onClick={() => void send()}
-        >
-          {sending
-            ? "Sending…"
-            : `Send to ${chosen.length} client${chosen.length === 1 ? "" : "s"}`}
-        </button>
-      </div>
+      <BulkWhatsAppForm ids={chosen.map((c) => c.id)} onSent={() => setPicked({})} />
     </Panel>
   );
 }

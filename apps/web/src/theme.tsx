@@ -17,7 +17,7 @@ export interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "system",
+  theme: "light",
   resolvedTheme: "light",
   setTheme: () => {},
   toggleTheme: () => {},
@@ -31,17 +31,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     "/forgot-password",
     "/reset-password",
   ].includes(pathname);
-  const [authTheme, setAuthTheme] = useState<Theme>("system");
+  const [authTheme, setAuthTheme] = useState<Theme>("light");
   const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem("theme");
-      if (stored === "light" || stored === "dark" || stored === "system") {
+      if (stored === "light" || stored === "dark") {
         return stored;
       }
     } catch {
       /* ignore local storage error */
     }
-    return "system";
+    return "light";
   });
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() => {

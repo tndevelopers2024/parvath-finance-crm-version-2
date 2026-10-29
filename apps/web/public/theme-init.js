@@ -1,11 +1,7 @@
 (function () {
   try {
     var t = localStorage.getItem("theme");
-    var isDark =
-      t === "dark" ||
-      (t !== "light" &&
-        t !== "dark" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var isDark = t === "dark";
     if (isDark) {
       document.documentElement.classList.add("dark");
       document.documentElement.setAttribute("data-theme", "dark");

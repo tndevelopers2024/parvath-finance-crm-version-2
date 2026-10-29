@@ -31,6 +31,22 @@ export default function Dashboard() {
     day = selected || d.today;
   const events = d.events.filter((e: any) => e.status === "Pending"),
     tasks = d.followups.filter((f: any) => f.state === "pending");
+  const daysLeft = (iso: string) =>
+    Math.round(
+      (Date.parse(iso.slice(0, 10)) - Date.parse(d.today.slice(0, 10))) /
+        86400000,
+    );
+  const dueLabel = (n: number) =>
+    n < 0
+      ? `${-n} day${n === -1 ? "" : "s"} overdue`
+      : n === 0
+        ? "Due today"
+        : n === 1
+          ? "Tomorrow"
+          : `In ${n} days`;
+  const upcomingRenewals = [...events]
+    .sort((a: any, b: any) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 8);
   const calendarMarkers = [
                   ...(d.events || []).filter((event: any) => event.status !== "Cancelled").map((event: any) => ({
                     date: event.dueDate.slice(0, 10),
@@ -274,6 +290,48 @@ export default function Dashboard() {
             </Panel>
           </div>
         </div>
+        <Panel
+          title="Upcoming Renewals"
+          action={
+            <Link className="text-link" to="/renewals">
+              View All <ArrowRight size={14} />
+            </Link>
+          }
+          className="attention-panel"
+        >
+          {upcomingRenewals.length ? (
+            upcomingRenewals.map((e: any) => {
+              const n = daysLeft(e.dueDate);
+              return (
+                <div className="attention-row" key={e.id}>
+                  <span className={`circle-icon ${n <= 7 ? "rose" : "amber"}`}>
+                    <CalendarDays size={29} />
+                  </span>
+                  <Link to={"/renewals/" + e.id} className="attention-person">
+                    <small className={n <= 7 ? "rose" : "amber"}>
+                      {dueLabel(n).toUpperCase()} · {date(e.dueDate)}
+                    </small>
+                    <strong>{e.client.name}</strong>
+                    <span>
+                      {e.product.definition.provider.name} –{" "}
+                      {e.product.definition.name}
+                    </span>
+                    <span>Policy No: {e.product.identifier}</span>
+                  </Link>
+                  <div className="attention-amount">
+                    <strong>{rupees(e.amountMinor)}</strong>
+                  </div>
+                  <ContactActions
+                    client={e.client}
+                    detail={"/renewals/" + e.id}
+                  />
+                </div>
+              );
+            })
+          ) : (
+            <Empty text="No renewals are pending." />
+          )}
+        </Panel>
       </div>
     </div>
   );

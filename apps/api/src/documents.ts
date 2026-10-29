@@ -3,31 +3,19 @@ import type { Readable } from "node:stream";
 import { Router } from "express";
 import multer from "multer";
 import { fileTypeFromBuffer } from "file-type";
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { now } from "./domain.js";
 import { integrationStatus } from "./integrations.js";
+import {
+  deleteObject,
+  getObjectStream,
+  putObject,
+  StorageNotFound,
+} from "./storage.js";
 import { audit, holdClient, HttpError, owned, permit } from "./security.js";
-export const s3 = new S3Client({
-  region: config.S3_REGION,
-  endpoint: config.S3_ENDPOINT || undefined,
-  forcePathStyle: !!config.S3_ENDPOINT,
-  ...(config.S3_ACCESS_KEY && config.S3_SECRET_KEY
-    ? {
-        credentials: {
-          accessKeyId: config.S3_ACCESS_KEY,
-          secretAccessKey: config.S3_SECRET_KEY,
-        },
-      }
-    : {}),
-});
+export { s3 } from "./storage.js";
 export const documents = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -68,14 +56,9 @@ documents.post(
     if (purpose === "Photo" && !detected.mime.startsWith("image/"))
       throw new HttpError(422, "A profile photo must be JPEG or PNG");
     const key = `${req.auth.organizationId}/${randomUUID()}.${detected.ext}`;
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: config.S3_BUCKET,
-        Key: key,
-        Body: f.buffer,
-        ContentType: detected.mime,
-      }),
-    );
+    await putObject(key, f.buffer, detected.mime);
+    // Without a virus scanner configured, files are released once their type has been checked above.
+    const scanned = Boolean(config.CLAMAV_HOST);
     try {
       const doc = await db.transaction(async (tx) => {
         await holdClient(tx, c.id, req);
@@ -91,24 +74,26 @@ documents.post(
             purpose,
             contentType: detected.mime,
             uploadedBy: req.auth.userId,
+            status: scanned ? "Quarantined" : "Available",
           },
         });
-        await tx.job.create({
-          data: {
-            organizationId: req.auth.organizationId,
-            key: `scan-${d.id}`,
-            type: "scan",
-            payload: { documentId: d.id },
-            runAt: now(),
-          },
-        });
+        if (scanned)
+          await tx.job.create({
+            data: {
+              organizationId: req.auth.organizationId,
+              key: `scan-${d.id}`,
+              type: "scan",
+              payload: { documentId: d.id },
+              runAt: now(),
+            },
+          });
         await audit(
           tx,
           req,
           "upload",
           "Document",
           d.id,
-          "Document uploaded to quarantine",
+          scanned ? "Document uploaded to quarantine" : "Document uploaded",
         );
         return d;
       });
@@ -116,9 +101,7 @@ documents.post(
         .status(201)
         .json({ data: { id: doc.id, name: doc.name, status: doc.status } });
     } catch (e) {
-      await s3.send(
-        new DeleteObjectCommand({ Bucket: config.S3_BUCKET, Key: key }),
-      );
+      await deleteObject(key);
       throw e;
     }
   },
@@ -130,15 +113,11 @@ documents.get("/documents/:id/download", async (req, res) => {
       409,
       "This file is quarantined until the security scan completes",
     );
-  if (!config.S3_BUCKET)
-    throw new HttpError(503, "Private document storage is not configured");
-  let file;
+  let file: Readable;
   try {
-    file = await s3.send(
-      new GetObjectCommand({ Bucket: config.S3_BUCKET, Key: d.key }),
-    );
-  } catch (e: any) {
-    if (e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404)
+    file = await getObjectStream(d.key);
+  } catch (e) {
+    if (e instanceof StorageNotFound)
       throw new HttpError(404, "The stored file could not be found");
     throw e;
   }
@@ -148,7 +127,7 @@ documents.get("/documents/:id/download", async (req, res) => {
   // pipeline destroys the S3 stream if the client goes away and surfaces a mid-stream failure
   // as a rejection instead of an unhandled 'error' event that would take the process down.
   try {
-    await pipeline(file.Body as Readable, res);
+    await pipeline(file, res);
   } catch {
     if (!res.headersSent) throw new HttpError(502, "File download failed");
     res.destroy();
