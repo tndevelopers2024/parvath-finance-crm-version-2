@@ -1,3 +1,4 @@
+import { productCategories } from "../../../packages/contracts/src/index";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, useData, useWrite } from "./api";
@@ -180,15 +181,7 @@ export default function CatalogueActions({
                       <label>
                         Category *
                         <select name="category" defaultValue={record.category}>
-                          {[
-                            "Life Insurance",
-                            "Health Insurance",
-                            "Vehicle Insurance",
-                            "Home Loan",
-                            "Business Loan",
-                            "Investment",
-                            "Term Insurance",
-                          ].map((c) => (
+                          {productCategories.map((c) => (
                             <option key={c}>{c}</option>
                           ))}
                         </select>

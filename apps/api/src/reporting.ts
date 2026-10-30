@@ -117,7 +117,8 @@ reporting.get("/dashboard", async (req, res) => {
     db.native
       .collection(schema.client.collection)
       .aggregate([
-        { $match: { organizationId: org } },
+        // Only accepted clients; people who have just enquired are leads.
+        { $match: { organizationId: org, isClient: true } },
         {
           $lookup: {
             from: contactCollection,

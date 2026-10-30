@@ -12,7 +12,7 @@ import { assertContactAllowed } from "./contact-policy.js";
 import { fromZonedTime } from "date-fns-tz";
 import type { Database } from "./persistence/repository.js";
 
-async function lockContactChanges(tx: Database, organizationId: string) {
+export async function lockContactChanges(tx: Database, organizationId: string) {
   await tx.native
     .collection<any>("contactLocks")
     .updateOne(
@@ -199,6 +199,7 @@ clients.get("/", async (req, res) => {
       status: z.string().optional(),
       city: z.string().optional(),
       product: z.string().optional(),
+      isClient: z.enum(["true", "false"]).optional(),
       sort: z.enum(["name", "createdAt"]).default("name"),
       direction: z.enum(["asc", "desc"]).default("asc"),
     })
@@ -208,6 +209,7 @@ clients.get("/", async (req, res) => {
   const where: any = {
     organizationId: req.auth.organizationId,
     ...(q.status ? { status: q.status } : {}),
+    ...(q.isClient ? { isClient: q.isClient === "true" } : {}),
   };
   where.AND = [
     ...(q.kind ? [{ contact: { kind: q.kind } }] : []),
@@ -264,7 +266,8 @@ clients.get("/", async (req, res) => {
   });
 });
 clients.get("/summary", async (req, res) => {
-  const where = { organizationId: req.auth.organizationId };
+  // People who are only leads so far are not clients until a sale is accepted.
+  const where = { organizationId: req.auth.organizationId, isClient: true };
   const [total, individual, business, products, attention] = await Promise.all([
     db.client.count({ where }),
     db.client.count({ where: { ...where, contact: { kind: "Individual" } } }),
@@ -284,7 +287,7 @@ clients.get("/template", permit("export"), (_req, res) =>
     .type("text/csv")
     .attachment("parvath-clients-template.csv")
     .send(
-      "name,phone,email,kind,city,state,source\nSample Person,+919000000001,sample@example.test,Individual,Chennai,Tamil Nadu,Referral\n",
+      "name,phone,email,kind,city,state,source\nSample Person,9000000001,sample@example.test,Individual,Chennai,Tamil Nadu,Referral\n",
     ),
 );
 clients.post("/import/preview", permit("edit"), async (req, res) => {

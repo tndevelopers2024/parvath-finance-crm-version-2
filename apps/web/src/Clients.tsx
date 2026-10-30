@@ -1,3 +1,4 @@
+import { productCategories } from "../../../packages/contracts/src/index";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Filter, Upload, ArrowUpDown, Trash2 } from "lucide-react";
@@ -63,6 +64,7 @@ export default function Clients() {
   const request = new URLSearchParams(params);
   request.set("page", String(page));
   request.set("limit", String(limit));
+  request.set("isClient", "true");
   const results = useData("/clients?" + request.toString()),
     summary = useData("/clients/summary");
   const d = summary.data?.data || {};
@@ -171,14 +173,7 @@ export default function Clients() {
             onChange={(e) => change("product", e.target.value)}
           >
             <option value="">All Products</option>
-            {[
-              "Life Insurance",
-              "Health Insurance",
-              "Vehicle Insurance",
-              "Home Loan",
-              "Investment",
-              "Term Insurance",
-            ].map((v) => (
+            {productCategories.map((v) => (
               <option key={v}>{v}</option>
             ))}
           </select>

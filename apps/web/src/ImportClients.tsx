@@ -44,7 +44,7 @@ export default function ImportClients() {
       >
         <p>
           CSV columns: name, phone, email, kind, city, state, source. Name and
-          phone are required (Indian mobiles start with 6-9). kind (default
+          phone are required (10 digits, starting with 6-9). kind (default
           Individual) must be Individual or Business; date of birth may be
           YYYY-MM-DD or DD-MM-YYYY. Maximum 500
           rows / 1 MB. Duplicate contacts are skipped, never overwritten.

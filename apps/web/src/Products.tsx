@@ -1,16 +1,8 @@
 import CatalogueWorkspace from "./CatalogueWorkspace";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  ShieldCheck,
-  HeartPulse,
-  Car,
-  House,
-  BriefcaseBusiness,
-  TrendingUp,
-  Shield,
-  Plus,
-} from "lucide-react";
+import { Plus } from "lucide-react";
+import { productCategories } from "../../../packages/contracts/src/index";
 import { useData, useWrite } from "./api";
 import {
   PageHeading,
@@ -22,19 +14,7 @@ import {
   useAuth,
   useToast,
 } from "./components";
-const categories = [
-  ["Life Insurance", "Life cover and savings plans", ShieldCheck],
-  [
-    "Health Insurance",
-    "Medical cover for individuals and families",
-    HeartPulse,
-  ],
-  ["Vehicle Insurance", "Car and two-wheeler policies", Car],
-  ["Home Loan", "Home purchase and property loans", House],
-  ["Business Loan", "Finance for business needs", BriefcaseBusiness],
-  ["Investment", "Client investments and accounts", TrendingUp],
-  ["Term Insurance", "Protection plans for families", Shield],
-] as const;
+const categories = productCategories.map((name) => [name] as const);
 export const productCategoryPath = (category: string) =>
   "/products/category/" + encodeURIComponent(category);
 export default function Products() {

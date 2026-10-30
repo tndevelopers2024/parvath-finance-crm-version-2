@@ -191,6 +191,8 @@ export default function ClientForm({
       const c = existing.data.data;
       reset({
         ...c,
+        // Saved as +91XXXXXXXXXX; the field shows only the 10 digits.
+        phone: String(c.phone || "").replace(/^\+91/, ""),
         dob: c.dob?.slice(0, 10) || "",
         registrationNumber: c.business?.registrationNumber || "",
         industry: c.business?.industry || "",
@@ -415,7 +417,17 @@ export default function ClientForm({
           <Briefcase size={18} />
         )}
         <input
-          type={type}
+          type={name === "phone" ? "tel" : type}
+          inputMode={name === "phone" ? "numeric" : undefined}
+          maxLength={name === "phone" ? 10 : undefined}
+          onBeforeInput={
+            name === "phone"
+              ? (e) => {
+                  if (e.data && /\D/.test(e.data)) e.preventDefault();
+                }
+              : undefined
+          }
+          autoComplete="off"
           aria-label={label}
           {...register(name as any)}
           placeholder={placeholder}
@@ -540,7 +552,7 @@ export default function ClientForm({
                       ? "Enter business name"
                       : "Enter full name",
                   )}
-                  {field("phone", "Phone Number *", "+91 90000 00000", "tel")}
+                  {field("phone", "Phone Number *", "10-digit mobile number", "tel")}
                   {field(
                     "email",
                     "Email Address",

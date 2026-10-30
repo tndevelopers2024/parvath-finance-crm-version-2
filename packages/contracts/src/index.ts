@@ -70,6 +70,21 @@ export const businessDate = z
     return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
   }, "Enter a valid date.");
 export const channels = ["Call", "WhatsApp", "Email", "Meeting"] as const;
+// The product groups the business sells. Insurance groups keep their own providers; the rest are single items.
+export const productCategories = [
+  "Life Insurance",
+  "Health Insurance",
+  "Mutual Funds",
+  "Fixed Deposits",
+  "Bonds",
+  "NCD",
+  "AIF",
+  "PMS",
+  "Unlisted Shares",
+  "Real Estate",
+  "Solar",
+  "Misc",
+] as const;
 export const eventTypes = [
   "Insurance renewal",
   "Premium payment",
@@ -234,30 +249,34 @@ export const onboardingProfileSchema = z.object({
     )
     .optional(),
 });
-// Indian mobiles (optional +91 / 91 / 0 prefix) must start 6-9; other "+" numbers are international and
-// only checked for E.164 shape. Applies to input only; stored numbers are never re-validated.
-const indianMobile = /^(?:\+91|91|0)?([6-9]\d{9})$/;
+// A mobile number is exactly 10 digits starting 6-9. It is stored as +91 plus those digits, which is also
+// the one prefixed form accepted back (saved records, imports); spaces, dashes and other prefixes are refused.
+const mobile = /^(?:\+91)?([6-9]\d{9})$/;
 export const phone = z
   .string()
-  .transform((v) => v.replace(/[\s()-]/g, ""))
-  .transform((v) => {
-    const m = indianMobile.exec(v);
-    return m ? `+91${m[1]}` : v;
+  .trim()
+  .superRefine((v, ctx) => {
+    if (!v) {
+      ctx.addIssue({ code: "custom", message: "Enter a phone number." });
+      return;
+    }
+    const m = mobile.exec(v);
+    if (!m) {
+      ctx.addIssue({
+        code: "custom",
+        message: /^\d{10}$/.test(v)
+          ? "Mobile numbers start with 6, 7, 8 or 9."
+          : "Enter a 10-digit mobile number (digits only).",
+      });
+      return;
+    }
+    if (/^(\d)\1{7}$/.test(m[1].slice(-8)))
+      ctx.addIssue({
+        code: "custom",
+        message: "That number looks invalid. Enter a real phone number.",
+      });
   })
-  .pipe(
-    z
-      .string()
-      .regex(/^\+[1-9]\d{7,14}$/, {
-        error: (issue) =>
-          blank(issue.input)
-            ? "Enter a phone number."
-            : "Enter a 10-digit mobile number starting with 6–9, or an international number with its country code (for example +44…).",
-      })
-      .refine(
-        (v) => !v.startsWith("+91") || /^\+91[6-9]\d{9}$/.test(v),
-        "Indian mobile numbers have 10 digits and start with 6, 7, 8 or 9.",
-      ),
-  );
+  .transform((v) => `+91${v.slice(-10)}`);
 export const clientSchema = z.object({
   name: z
     .string()
@@ -337,6 +356,18 @@ export const opportunitySchema = z.object({
   nextFollowUp: z.iso.datetime().optional(),
   stage: z.enum(stages).default("New Enquiries"),
 });
+// A new lead names the person directly; an existing client may still be linked by id.
+export const leadCreateSchema = opportunitySchema
+  .extend({
+    clientId: z.uuid().optional(),
+    name: clientSchema.shape.name.optional(),
+    phone: clientSchema.shape.phone.optional(),
+    email: clientSchema.shape.email,
+  })
+  .refine((v) => v.clientId || (v.name && v.phone), {
+    message: "Enter the lead's name and phone number.",
+    path: ["name"],
+  });
 export const opportunityUpdateSchema = opportunitySchema
   .omit({ clientId: true, stage: true })
   .extend({

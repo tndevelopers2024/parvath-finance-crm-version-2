@@ -10,6 +10,7 @@ import {
   eventTypesForCategory,
   visibleLeadStages,
   leadStageLabel,
+  phone as phoneSchema,
 } from "../../../packages/contracts/src/index";
 import DateField from "./DateField";
 import ReadOnlyField from "./ReadOnlyField";
@@ -39,6 +40,11 @@ const formValues = (e: React.FormEvent<HTMLFormElement>) => {
     string
   >;
 };
+// Same rule the server applies, so the message appears as soon as the field is left.
+const checkPhone = (value: string | undefined) => {
+  const result = phoneSchema.safeParse(value ?? "");
+  return result.success ? "" : result.error.issues[0].message;
+};
 const localISO = (v: string) => new Date(v + "+05:30").toISOString();
 export function NewRecord({
   type,
@@ -54,6 +60,7 @@ export function NewRecord({
     catalogue = useData("/catalogue");
   const [clientId, setClientId] = useState(params.get("clientId") || ""),
     [error, setError] = useState(""),
+    [phoneError, setPhoneError] = useState(""),
     [definitionId, setDefinitionId] = useState(
       params.get("definitionId") || "",
     );
@@ -92,18 +99,28 @@ export function NewRecord({
           : "Add client policy / account";
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     const f = formValues(e);
-    if (!clientId) {
+    if (!clientId && type !== "leads") {
       setError("Please select a client");
       return;
+    }
+    if (type === "leads" && !clientId) {
+      const problem = checkPhone(f.phone);
+      if (problem) {
+        setPhoneError(problem);
+        setError("");
+        return;
+      }
     }
     let body: any;
     try {
       if (type === "leads")
         body = {
           ...f,
-          clientId,
+          // A lead is a new person unless an existing client was linked from the client's own page.
+          clientId: clientId || undefined,
+          email: f.email || undefined,
           nextFollowUp: f.nextFollowUp ? localISO(f.nextFollowUp) : undefined,
-          stage: params.get("stage") || "New Enquiries",
+          stage: f.stage || params.get("stage") || "New Enquiries",
         };
       else if (type === "followups")
         body = {
@@ -140,7 +157,22 @@ export function NewRecord({
           : "/" + type + "/" + r.data.id,
       );
     } catch (e) {
-      setError((e as Error).message);
+      // Name the fields the server rejected instead of a generic "check them" message.
+      const fields = (e as any).details?.fieldErrors as
+        | Record<string, string[]>
+        | undefined;
+      const labels: Record<string, string> = {
+        name: "Name",
+        phone: "Phone number",
+        email: "Email",
+        requirement: "Requirement",
+        nextAction: "Next action",
+        nextFollowUp: "Next follow-up",
+      };
+      const lines = Object.entries(fields || {})
+        .filter(([, messages]) => messages?.[0])
+        .map(([key, messages]) => `${labels[key] || key}: ${messages[0]}`);
+      setError(lines.length ? lines.join(" ") : (e as Error).message);
     }
   };
   return (
@@ -161,6 +193,55 @@ export function NewRecord({
       <Panel className="record-form">
         <form onSubmit={submit}>
           <div className="form-grid">
+            {type === "leads" && !clientId ? (
+              <>
+                <label>
+                  Lead Name *
+                  <input
+                    name="name"
+                    required
+                    minLength={2}
+                    autoComplete="off"
+                    placeholder="Full name"
+                  />
+                </label>
+                <label>
+                  Phone Number *
+                  <input
+                    name="phone"
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    onBeforeInput={(e) => {
+                      if ((e as any).data && /\D/.test((e as any).data))
+                        e.preventDefault();
+                    }}
+                    required
+                    autoComplete="off"
+                    placeholder="10-digit mobile number"
+                    aria-invalid={!!phoneError}
+                    onChange={() => phoneError && setPhoneError("")}
+                    onBlur={(e) =>
+                      e.target.value && setPhoneError(checkPhone(e.target.value))
+                    }
+                  />
+                  {phoneError && (
+                    <small className="field-error" role="alert">
+                      {phoneError}
+                    </small>
+                  )}
+                </label>
+                <label>
+                  Email (optional)
+                  <input
+                    name="email"
+                    type="email"
+                    autoComplete="off"
+                    placeholder="name@example.com"
+                  />
+                </label>
+              </>
+            ) : (
             <label>
               Client *
               <ClientCombobox
@@ -176,6 +257,7 @@ export function NewRecord({
                 Create a new client
               </Link>
             </label>
+            )}
             {type !== "products" && (
               <label>
                 Owner *
@@ -193,6 +275,19 @@ export function NewRecord({
                     defaultValue={params.get("requirement") || ""}
                     placeholder="e.g. Home Loan"
                   />
+                </label>
+                <label>
+                  Stage
+                  <select
+                    name="stage"
+                    defaultValue={params.get("stage") || "New Enquiries"}
+                  >
+                    {visibleLeadStages
+                      .filter((st) => !["Won", "Lost"].includes(st))
+                      .map((st) => (
+                        <option key={st}>{st}</option>
+                      ))}
+                  </select>
                 </label>
                 <label>
                   Source

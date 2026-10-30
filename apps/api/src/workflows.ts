@@ -3,12 +3,14 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { z } from "zod";
 import {
-  opportunitySchema,
+  leadCreateSchema,
+  clientSchema,
   opportunityUpdateSchema,
   followupSchema,
   productSchema,
   eventSchema,
   eventTypesForCategory,
+  productCategories,
   eventUpdateSchema,
   eventCancelSchema,
   paymentReversalSchema,
@@ -17,6 +19,7 @@ import {
   stages,
 } from "../../../packages/contracts/src/index.js";
 import { db } from "./db.js";
+import { createClient, duplicates, lockContactChanges } from "./clients.js";
 import { assertContactAllowed } from "./contact-policy.js";
 import {
   audit,
@@ -219,15 +222,7 @@ workflows.post("/catalogue", permit("admin"), async (req, res) => {
   const v = z
     .object({
       name: z.string().trim().min(2).max(100),
-      category: z.enum([
-        "Life Insurance",
-        "Health Insurance",
-        "Vehicle Insurance",
-        "Home Loan",
-        "Business Loan",
-        "Investment",
-        "Term Insurance",
-      ]),
+      category: z.enum(productCategories),
       provider: z.string().trim().min(2).max(100).optional(),
       providerId: z.uuid().optional(),
     })
@@ -309,15 +304,7 @@ workflows.patch("/catalogue/:id", permit("admin"), async (req, res) => {
     .object({
       name: z.string().trim().min(2).max(100),
       providerId: z.uuid(),
-      category: z.enum([
-        "Life Insurance",
-        "Health Insurance",
-        "Vehicle Insurance",
-        "Home Loan",
-        "Business Loan",
-        "Investment",
-        "Term Insurance",
-      ]),
+      category: z.enum(productCategories),
     })
     .parse(req.body);
   await owned("provider", v.providerId, req);
@@ -413,19 +400,51 @@ workflows.get("/leads", async (req, res) => {
   });
 });
 workflows.post("/leads", permit("edit"), async (req, res) => {
-  const v = opportunitySchema.parse(req.body);
+  const { name, phone, email, ...v } = leadCreateSchema.parse(req.body);
   if (["Won", "Lost"].includes(v.stage))
     throw new HttpError(
       400,
       "Create an open opportunity, then record its outcome",
     );
-  await owned("client", v.clientId, req);
+  if (v.clientId) await owned("client", v.clientId, req);
   await validOwner(v.ownerId, req);
   const row = await db.transaction(async (tx) => {
-    await holdClient(tx, v.clientId, req);
+    let clientId = v.clientId;
+    let reused = false;
+    if (!clientId) {
+      // The same phone number means the same person: attach the lead to them instead of duplicating them.
+      await lockContactChanges(tx, req.auth.organizationId);
+      const [existing] = await duplicates(
+        req.auth.organizationId,
+        phone!,
+        undefined,
+        undefined,
+        tx,
+      );
+      if (existing) {
+        clientId = existing.id;
+        reused = true;
+      } else {
+        const created = await createClient(
+          tx,
+          clientSchema.parse({ name, phone, email, source: "Direct" }),
+          req.auth.organizationId,
+          req.auth.userId,
+          { readBack: false },
+        );
+        // Someone who has only enquired is a lead, not yet a client.
+        await tx.client.update({
+          where: { id: created.id },
+          data: { isClient: false },
+        });
+        clientId = created.id;
+        await audit(tx, req, "create", "Client", created.id, "Lead contact added");
+      }
+    }
+    await holdClient(tx, clientId!, req);
     if (v.nextFollowUp)
       assertContactAllowed(
-        await tx.client.findUniqueOrThrow({ where: { id: v.clientId } }),
+        await tx.client.findUniqueOrThrow({ where: { id: clientId! } }),
         "Call",
         new Date(v.nextFollowUp),
         req.auth.timezone,
@@ -433,6 +452,7 @@ workflows.post("/leads", permit("edit"), async (req, res) => {
     const o = await tx.opportunity.create({
       data: {
         ...v,
+        clientId: clientId!,
         createdAt: now(),
         nextFollowUp: v.nextFollowUp ? new Date(v.nextFollowUp) : undefined,
         organizationId: req.auth.organizationId,
@@ -449,7 +469,7 @@ workflows.post("/leads", permit("edit"), async (req, res) => {
       await tx.followUp.create({
         data: {
           organizationId: req.auth.organizationId,
-          clientId: v.clientId,
+          clientId: clientId!,
           opportunityId: o.id,
           ownerId: v.ownerId,
           channel: "Call",
@@ -459,7 +479,7 @@ workflows.post("/leads", permit("edit"), async (req, res) => {
         },
       });
     await audit(tx, req, "create", "Opportunity", o.id, "New lead added");
-    return o;
+    return { ...o, existingClient: reused };
   });
   res.status(201).json({ data: row });
 });

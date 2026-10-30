@@ -156,7 +156,7 @@ describe("Authenticated MongoDB workflows", () => {
   it("creates an individual and persists normalized values", async () => {
     const r = await write("/clients", {
       name: "Test Client",
-      phone: "90000 88881",
+      phone: "9000088881",
       email: "TEST@EXAMPLE.TEST",
       kind: "Individual",
       city: "Chennai",
